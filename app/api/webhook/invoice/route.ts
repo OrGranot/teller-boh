@@ -3,7 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const React = require("react");
 import sgMail from "@sendgrid/mail";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
 import InvoicePDF from "@/components/InvoicePDF";
 import type { CompanySettings } from "@/lib/types";
@@ -44,7 +44,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role key to bypass RLS — this endpoint is called server-to-server
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     // ── Load company settings ────────────────────────────────────────────────
     const { data: company } = await supabase
