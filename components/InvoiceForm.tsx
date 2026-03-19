@@ -244,7 +244,15 @@ export default function InvoiceForm({ initial }: Props) {
     if (existing) {
       // Update existing contact with latest data
       await supabase.from("contacts").update(contactData).eq("id", existing.id);
-      setContacts((prev) => prev.map((c) => c.id === existing.id ? { ...c, ...contactData } : c));
+      setContacts((prev) => prev.map((c) => c.id === existing.id ? {
+        ...c,
+        name: contactData.name,
+        address: contactData.address ?? undefined,
+        email: contactData.email ?? undefined,
+        trade_register: contactData.trade_register ?? undefined,
+        tax_number: contactData.tax_number ?? undefined,
+        vat_number: contactData.vat_number ?? undefined,
+      } : c));
     } else {
       // Create new contact
       const { data } = await supabase.from("contacts").insert(contactData).select().single();
