@@ -1,0 +1,149 @@
+import { NextRequest, NextResponse } from "next/server";
+import { renderToBuffer } from "@react-pdf/renderer";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const React = require("react");
+import { createClient } from "@/lib/supabase/server";
+import { getNextInvoiceNumber } from "@/lib/invoice-counter";
+import InvoicePDF from "@/components/InvoicePDF";
+import type { Invoice, CompanySettings } from "@/lib/types";
+
+export async function POST(req: NextRequest) {
+  try {
+    const { invoice }: { invoice: Invoice } = await req.json();
+    const supabase = await createClient();
+
+    // ── Load company settings ────────────────────────────────────────────────
+    const { data: company } = await supabase
+      .from("company_settings")
+      .select("*")
+      .limit(1)
+      .single();
+
+    if (!company) {
+      return NextResponse.json({ error: "Company settings not found" }, { status: 400 });
+    }
+
+    // ── Get next invoice number (atomic) ─────────────────────────────────────
+    // Only assign a new number if the invoice doesn't have one yet
+    const invoiceNumber = invoice.invoice_number || await getNextInvoiceNumber(supabase);
+
+    const invoiceWithNumber = { ...invoice, invoice_number: invoiceNumber };
+
+    // ── Save / update invoice in DB ──────────────────────────────────────────
+    // price is net unit price; sum is gross total
+    const subtotal = invoice.items.reduce((acc, item) => {
+      const qty = parseFloat(item.qty || "0");
+      const price = parseFloat(item.price || "0");
+      const vat = parseFloat(item.vat_rate || "0");
+      const manSum = parseFloat(item.sum || "0");
+      return acc + (manSum > 0 ? manSum : qty * price * (1 + vat / 100));
+    }, 0);
+    const tipPct = parseFloat(invoice.tip_percent || "0");
+    const tipAmt = tipPct > 0 ? subtotal * tipPct / 100 : 0;
+    const total = subtotal + tipAmt;
+
+    let savedInvoiceId = invoice.id;
+    if (invoice.id) {
+      // Update existing
+      await supabase
+        .from("invoices")
+        .update({
+          date: invoice.date,
+          due_date: invoice.due_date,
+          customer_name: invoice.customer_name,
+          customer_address: invoice.customer_address,
+          customer_trade_register: invoice.customer_trade_register || null,
+          customer_tax_number: invoice.customer_tax_number || null,
+          customer_vat_number: invoice.customer_vat_number || null,
+          tip_percent: tipPct,
+          lang: invoice.lang,
+          total,
+          status: "sent",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", invoice.id);
+
+      // Replace line items
+      await supabase.from("invoice_items").delete().eq("invoice_id", invoice.id);
+    } else {
+      // Insert new invoice
+      const { data: newInvoice } = await supabase
+        .from("invoices")
+        .insert({
+          invoice_number: invoiceNumber,
+          date: invoice.date,
+          due_date: invoice.due_date,
+          customer_name: invoice.customer_name,
+          customer_address: invoice.customer_address,
+          customer_trade_register: invoice.customer_trade_register || null,
+          customer_tax_number: invoice.customer_tax_number || null,
+          customer_vat_number: invoice.customer_vat_number || null,
+          tip_percent: tipPct,
+          lang: invoice.lang,
+          total,
+          status: "sent",
+        })
+        .select("id")
+        .single();
+      savedInvoiceId = newInvoice?.id;
+    }
+
+    // Insert line items
+    if (savedInvoiceId) {
+      const itemRows = invoice.items
+        .filter((item) => item.description?.trim())
+        .map((item, idx) => ({
+          invoice_id: savedInvoiceId,
+          qty: parseFloat(item.qty || "0"),
+          description: item.description,
+          price: parseFloat(item.price || "0"),
+          vat_rate: parseFloat(item.vat_rate || "7"),
+          sort_order: idx,
+        }));
+      if (itemRows.length > 0) {
+        await supabase.from("invoice_items").insert(itemRows);
+      }
+    }
+
+    // ── Fetch logo as base64 ─────────────────────────────────────────────────
+    let logoBase64: string | undefined;
+    if (company.logo_url) {
+      try {
+        const res = await fetch(company.logo_url);
+        if (res.ok) {
+          const ab = await res.arrayBuffer();
+          const b64 = Buffer.from(ab).toString("base64");
+          const mime = res.headers.get("content-type") || "image/png";
+          logoBase64 = `data:${mime};base64,${b64}`;
+        }
+      } catch {
+        // Logo fetch failed — continue without logo
+      }
+    }
+
+    // ── Generate PDF ─────────────────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfBuffer = await renderToBuffer(
+      React.createElement(InvoicePDF, {
+        invoice: invoiceWithNumber,
+        company: company as CompanySettings,
+        logoBase64,
+      }) as any
+    );
+
+    const filename = `Rechnung_${invoiceNumber}_${invoice.customer_name.replace(/\s+/g, "_")}.pdf`;
+
+    return new NextResponse(new Uint8Array(pdfBuffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Invoice-Id": savedInvoiceId || "",
+        "X-Invoice-Number": String(invoiceNumber),
+      },
+    });
+  } catch (err) {
+    console.error("PDF generation error:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
