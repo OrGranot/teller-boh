@@ -62,7 +62,7 @@ export default function LoginPage() {
         className="bg-white rounded-2xl shadow-sm w-full max-w-sm p-10"
         style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.08)" }}
       >
-        <h1 className="text-2xl font-bold mb-1">Teller Invoice</h1>
+        <h1 className="text-2xl font-bold mb-1">Teller BOH</h1>
         <p className="text-sm text-gray-400 mb-8">Sign in to your account</p>
 
         {error && (
