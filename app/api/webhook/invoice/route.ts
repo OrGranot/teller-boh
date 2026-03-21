@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
       customer_trade_register: customer_trade_register || null,
       tip_percent: "0",
       lang,
+      status: "paid" as const,
       items: parsedItems,
     };
 

@@ -219,9 +219,14 @@ export default function InvoicePDF({ invoice, company, logoBase64 }: Props) {
           <Text style={s.totalText}>{L.total}:  {formatEuro(total)}</Text>
         </View>
 
-        {/* ── Due Date ── */}
+        {/* ── Due Date / Paid ── */}
         <View style={s.dueRow}>
-          <Text style={s.dueText}>{L.due}  {invoice.due_date}</Text>
+          {invoice.status === "paid"
+            ? <Text style={[s.dueText, { color: "#2a7a2a", fontFamily: "Helvetica-Bold" }]}>
+                {invoice.lang === "en" ? "✓ Already paid" : "✓ Bereits bezahlt"}
+              </Text>
+            : <Text style={s.dueText}>{L.due}  {invoice.due_date}</Text>
+          }
         </View>
 
         {/* ── Footer ── */}
