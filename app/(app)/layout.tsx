@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 const NAV = [
   { href: "/invoices/new", label: "New Invoice", icon: "+" },
   { href: "/invoices", label: "Invoices", icon: "≡" },
+  { href: "/vouchers", label: "Vouchers", icon: "🎟" },
   { href: "/contacts", label: "Contacts", icon: "◎" },
   { href: "/items", label: "Catalog", icon: "◈" },
   { href: "/settings", label: "Settings", icon: "⚙" },
@@ -32,8 +33,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo/Brand */}
         <div className="px-5 py-6 border-b border-white/10">
-          <span className="text-white font-bold text-lg tracking-tight">Teller</span>
-          <span className="text-gray-400 text-xs block mt-0.5">Invoice Manager</span>
+          <span className="text-white font-bold text-lg tracking-tight">Teller BOH</span>
+          <span className="text-gray-400 text-xs block mt-0.5">Back of House</span>
         </div>
 
         {/* Nav links */}
