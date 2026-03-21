@@ -194,7 +194,7 @@ export default function InvoicePDF({ invoice, company, logoBase64 }: Props) {
             >
               <Text style={[s.cell, s.colQty]}>{item.qty}</Text>
               <Text style={[s.cell, s.colDesc]}>{item.description}</Text>
-              <Text style={[s.cell, s.colVat]}>{item.vatAmt > 0 ? formatEuro(item.vatAmt) : "-"}</Text>
+              <Text style={[s.cell, s.colVat]}>{item.vatAmt > 0 ? `${parseNum(item.vat_rate)}%  ${formatEuro(item.vatAmt)}` : "-"}</Text>
               <Text style={[s.cell, s.colPrice]}>{parseNum(item.price) > 0 ? formatEuro(parseNum(item.price)) : "-"}</Text>
               <Text style={[s.cell, s.colSum]}>{formatEuro(item.rowSum)}</Text>
             </View>
