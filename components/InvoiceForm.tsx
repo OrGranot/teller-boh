@@ -359,7 +359,7 @@ export default function InvoiceForm({ initial }: Props) {
         tip_percent: tipPctVal,
         lang: invoice.lang,
         total: totalVal,
-        status: "draft",
+        status: initial?.status === "paid" ? "paid" : "draft",
         updated_at: new Date().toISOString(),
       }).eq("id", id);
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
