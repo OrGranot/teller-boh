@@ -289,6 +289,7 @@ export default function InvoiceForm({ initial }: Props) {
       items: activeItems,
       tip_percent: tipEnabled ? tipPercent : "0",
       lang,
+      status: initial?.status,
     };
   }
 

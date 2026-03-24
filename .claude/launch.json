@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "invoice-app",
+      "name": "boh-app",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["--prefix", "/Users/orgranot/Desktop/Teller/BOH app", "run", "dev"],
       "port": 3000
     }
   ]

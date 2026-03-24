@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
           tip_percent: tipPct,
           lang: invoice.lang,
           total,
-          status: "sent",
+          status: invoice.status === "paid" ? "paid" : "sent",
           updated_at: new Date().toISOString(),
         })
         .eq("id", invoice.id);

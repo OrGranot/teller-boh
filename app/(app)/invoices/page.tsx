@@ -66,6 +66,58 @@ export default function InvoicesPage() {
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
   }
 
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function handleDownload(inv: Invoice) {
+    setDownloading(inv.id);
+    try {
+      const { data: items } = await supabase
+        .from("invoice_items")
+        .select("*")
+        .eq("invoice_id", inv.id)
+        .order("sort_order");
+
+      const { data: full } = await supabase
+        .from("invoices")
+        .select("*")
+        .eq("id", inv.id)
+        .single();
+
+      const invoice = {
+        ...full,
+        items: (items || []).map((it) => ({
+          qty: String(it.qty),
+          description: it.description,
+          price: String(it.price),
+          vat_rate: String(it.vat_rate),
+          sum: "",
+        })),
+      };
+
+      const res = await fetch("/api/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert("Error generating PDF: " + err.error);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Rechnung_${inv.invoice_number}_${inv.customer_name.replace(/\s+/g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   const filtered = invoices.filter((inv) => {
     const q = search.toLowerCase().trim();
     const matchSearch = !q ||
@@ -217,6 +269,13 @@ export default function InvoicesPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => handleDownload(inv)}
+                        disabled={downloading === inv.id}
+                        className="text-xs text-gray-500 hover:text-gray-900 font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-40"
+                      >
+                        {downloading === inv.id ? "…" : "PDF"}
+                      </button>
                       <Link
                         href={`/invoices/${inv.id}`}
                         className="text-xs text-gray-500 hover:text-gray-900 font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
