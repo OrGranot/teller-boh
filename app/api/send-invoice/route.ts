@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const React = require("react");
-import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
 import InvoicePDF from "@/components/InvoicePDF";
 import type { Invoice, CompanySettings } from "@/lib/types";
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
@@ -136,17 +136,15 @@ export async function POST(req: NextRequest) {
       ? `Guten Tag,\n\nim Anhang finden Sie unsere Rechnung Nr. ${invoiceNumber}.\n\nBei Fragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\n${company.name}`
       : `Dear recipient,\n\nPlease find attached our invoice no. ${invoiceNumber}.\n\nDon't hesitate to reach out if you have any questions.\n\nBest regards,\n${company.name}`;
 
-    await sgMail.send({
+    await resend.emails.send({
       to: invoice.customer_email,
-      from: { email: "hello@tellerberlin.com", name: company.name },
+      from: `${company.name} <hello@tellerberlin.com>`,
       subject,
       text: body,
       attachments: [
         {
           content: Buffer.from(pdfBuffer).toString("base64"),
           filename,
-          type: "application/pdf",
-          disposition: "attachment",
         },
       ],
     });

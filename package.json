@@ -10,7 +10,7 @@
   "dependencies": {
     "@netlify/plugin-nextjs": "^5.15.9",
     "@react-pdf/renderer": "^4.3.2",
-    "@sendgrid/mail": "^8.1.6",
+    "resend": "^3.0.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.1",
     "next": "16.1.6",
