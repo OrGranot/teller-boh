@@ -84,10 +84,31 @@ export default function VouchersPage() {
   const totalActive = vouchers.filter((v) => v.status === "active").reduce((s, v) => s + v.amount, 0);
   const totalRedeemed = vouchers.filter((v) => v.status === "redeemed").length;
 
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; code: string } | null>(null);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   const formatDate = (d: string | null) => {
     if (!d) return "—";
     return new Date(d).toLocaleDateString("de-DE");
   };
+
+  const formatDateTime = (d: string | null) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    return dt.toLocaleDateString("de-DE") + " " + dt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  async function deleteVoucher() {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    await supabase.from("vouchers").delete().eq("id", deleteConfirm.id);
+    setVouchers((prev) => prev.filter((v) => v.id !== deleteConfirm.id));
+    setExpanded(null);
+    setDeleteConfirm(null);
+    setDeleteInput("");
+    setDeleting(false);
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
@@ -146,7 +167,6 @@ export default function VouchersPage() {
                 <th className="text-left px-3 py-3">Recipient</th>
                 <th className="text-right px-3 py-3">Amount</th>
                 <th className="text-center px-3 py-3">Purchased</th>
-                <th className="text-center px-3 py-3">Valid until</th>
                 <th className="text-center px-3 py-3">Status</th>
               </tr>
             </thead>
@@ -171,8 +191,7 @@ export default function VouchersPage() {
                       <div className="text-xs text-gray-400">{v.recipient_email || ""}</div>
                     </td>
                     <td className="px-3 py-3.5 text-right font-semibold">{formatEuro(v.amount)}</td>
-                    <td className="px-3 py-3.5 text-center text-gray-500">{formatDate(v.purchased_at)}</td>
-                    <td className="px-3 py-3.5 text-center text-gray-500">{formatDate(v.valid_until)}</td>
+                    <td className="px-3 py-3.5 text-center text-gray-500 text-xs">{formatDateTime(v.purchased_at)}</td>
                     <td className="px-3 py-3.5 text-center">
                       <select
                         value={v.status}
@@ -189,7 +208,7 @@ export default function VouchersPage() {
                   </tr>
                   {expanded === v.id && (
                     <tr key={`${v.id}-detail`} className="bg-gray-50 border-b border-gray-100">
-                      <td colSpan={7} className="px-5 py-4">
+                      <td colSpan={6} className="px-5 py-4">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             {v.personal_message && (
@@ -198,8 +217,11 @@ export default function VouchersPage() {
                                 <p className="mt-1 text-gray-700 italic">&ldquo;{v.personal_message}&rdquo;</p>
                               </div>
                             )}
+                            <div className="text-xs text-gray-400">
+                              Valid until: {formatDate(v.valid_until)}
+                            </div>
                             {v.redeemed_at && (
-                              <div className="text-xs text-gray-400">Redeemed on {formatDate(v.redeemed_at)}</div>
+                              <div className="text-xs text-gray-400 mt-1">Redeemed on {formatDate(v.redeemed_at)}</div>
                             )}
                             {v.stripe_session_id && (
                               <div className="text-xs text-gray-400 mt-1">Stripe: {v.stripe_session_id}</div>
@@ -222,6 +244,42 @@ export default function VouchersPage() {
                               Save notes
                             </button>
                           </div>
+                        </div>
+                        {/* Delete section */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          {deleteConfirm?.id === v.id ? (
+                            <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-3">
+                              <span className="text-xs text-red-600 font-semibold">Type the voucher code to confirm deletion:</span>
+                              <input
+                                type="text"
+                                value={deleteInput}
+                                onChange={(e) => setDeleteInput(e.target.value)}
+                                placeholder={v.voucher_code}
+                                className="border border-red-300 rounded-lg px-3 py-1.5 text-sm font-mono outline-none focus:border-red-600 w-48"
+                                autoFocus
+                              />
+                              <button
+                                onClick={deleteVoucher}
+                                disabled={deleteInput !== v.voucher_code || deleting}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white disabled:opacity-30 hover:bg-red-700 transition-colors"
+                              >
+                                {deleting ? "Deleting…" : "Delete permanently"}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); setDeleteInput(""); }}
+                                className="text-xs text-gray-400 hover:text-gray-700"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ id: v.id, code: v.voucher_code }); setDeleteInput(""); }}
+                              className="text-xs text-red-400 hover:text-red-600 font-semibold"
+                            >
+                              Delete voucher…
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
