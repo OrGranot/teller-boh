@@ -93,6 +93,22 @@ export default function VouchersPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; code: string } | null>(null);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+
+  async function downloadPdf(id: string, code: string) {
+    setDownloadingPdf(id);
+    const res = await fetch(`/api/voucher-pdf/${id}`);
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Voucher_${code}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setDownloadingPdf(null);
+  }
 
   // Create voucher modal
   const [showCreate, setShowCreate] = useState(false);
@@ -300,8 +316,18 @@ export default function VouchersPage() {
                             </button>
                           </div>
                         </div>
+                        {/* Actions */}
+                        <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); downloadPdf(v.id, v.voucher_code); }}
+                            disabled={downloadingPdf === v.id}
+                            className="text-xs font-semibold text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-lg border border-gray-200 hover:border-gray-800 transition-colors disabled:opacity-50"
+                          >
+                            {downloadingPdf === v.id ? "Generating…" : "↓ Download PDF"}
+                          </button>
+                        </div>
                         {/* Delete section */}
-                        <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="mt-3">
                           {deleteConfirm?.id === v.id ? (
                             <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-3">
                               <span className="text-xs text-red-600 font-semibold">Type the voucher code to confirm deletion:</span>
