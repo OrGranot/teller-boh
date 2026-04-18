@@ -22,6 +22,12 @@ interface Voucher {
   notes: string | null;
 }
 
+function generateCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return `TELLER-${seg()}-${seg()}`;
+}
+
 const STATUS_COLORS = {
   active: "bg-green-50 text-green-700",
   redeemed: "bg-gray-100 text-gray-500",
@@ -88,6 +94,49 @@ export default function VouchersPage() {
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Create voucher modal
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    voucher_code: generateCode(),
+    amount: "",
+    buyer_name: "",
+    buyer_email: "",
+    recipient_name: "",
+    recipient_email: "",
+    personal_message: "",
+    valid_until: "",
+    notes: "",
+  });
+
+  function setField(k: string, v: string) {
+    setCreateForm(f => ({ ...f, [k]: v }));
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!createForm.amount || isNaN(parseFloat(createForm.amount))) return;
+    setCreating(true);
+    const { data, error } = await supabase.from("vouchers").insert({
+      voucher_code: createForm.voucher_code.toUpperCase().trim(),
+      amount: parseFloat(createForm.amount),
+      buyer_name: createForm.buyer_name || null,
+      buyer_email: createForm.buyer_email || null,
+      recipient_name: createForm.recipient_name || null,
+      recipient_email: createForm.recipient_email || null,
+      personal_message: createForm.personal_message || null,
+      valid_until: createForm.valid_until || null,
+      notes: createForm.notes || null,
+      status: "active",
+    }).select().single();
+    if (!error && data) {
+      setVouchers(prev => [data as Voucher, ...prev]);
+      setShowCreate(false);
+      setCreateForm({ voucher_code: generateCode(), amount: "", buyer_name: "", buyer_email: "", recipient_name: "", recipient_email: "", personal_message: "", valid_until: "", notes: "" });
+    }
+    setCreating(false);
+  }
+
   const formatDate = (d: string | null) => {
     if (!d) return "—";
     return new Date(d).toLocaleDateString("de-DE");
@@ -117,13 +166,19 @@ export default function VouchersPage() {
           <h1 className="text-2xl font-bold">Vouchers</h1>
           <p className="text-sm text-gray-400 mt-0.5">{vouchers.length} total</p>
         </div>
-        <div className="flex gap-4 text-sm">
+        <div className="flex gap-3 items-center text-sm">
           <div className="bg-green-50 text-green-700 px-4 py-2 rounded-xl font-semibold">
             Active value: {formatEuro(totalActive)}
           </div>
           <div className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-semibold">
             Redeemed: {totalRedeemed}
           </div>
+          <button
+            onClick={() => { setCreateForm(f => ({ ...f, voucher_code: generateCode() })); setShowCreate(true); }}
+            className="bg-gray-900 text-white px-4 py-2 rounded-xl font-semibold hover:bg-gray-700 transition-colors"
+          >
+            + New voucher
+          </button>
         </div>
       </div>
 
@@ -288,6 +343,92 @@ export default function VouchersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Create voucher modal */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowCreate(false)}>
+          <form
+            onClick={e => e.stopPropagation()}
+            onSubmit={handleCreate}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6"
+          >
+            <h2 className="text-lg font-bold mb-5">New voucher</h2>
+
+            <div className="space-y-3">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Code</label>
+                  <input value={createForm.voucher_code} onChange={e => setField("voucher_code", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-gray-800" />
+                </div>
+                <button type="button" onClick={() => setField("voucher_code", generateCode())}
+                  className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-xl hover:border-gray-800 transition-colors mb-0.5">
+                  ↺
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Amount (€) *</label>
+                <input type="number" min="0.01" step="0.01" required value={createForm.amount} onChange={e => setField("amount", e.target.value)}
+                  placeholder="0.00"
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Buyer name</label>
+                  <input value={createForm.buyer_name} onChange={e => setField("buyer_name", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Buyer email</label>
+                  <input type="email" value={createForm.buyer_email} onChange={e => setField("buyer_email", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Recipient name</label>
+                  <input value={createForm.recipient_name} onChange={e => setField("recipient_name", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Recipient email</label>
+                  <input type="email" value={createForm.recipient_email} onChange={e => setField("recipient_email", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Valid until</label>
+                <input type="date" value={createForm.valid_until} onChange={e => setField("valid_until", e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Personal message</label>
+                <textarea value={createForm.personal_message} onChange={e => setField("personal_message", e.target.value)}
+                  rows={2} placeholder="Optional gift message…"
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 resize-none" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Notes</label>
+                <input value={createForm.notes} onChange={e => setField("notes", e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button type="submit" disabled={creating}
+                className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                {creating ? "Creating…" : "Create voucher"}
+              </button>
+              <button type="button" onClick={() => setShowCreate(false)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:border-gray-800 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
