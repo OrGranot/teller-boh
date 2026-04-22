@@ -53,6 +53,7 @@ export default function InvoiceForm({ initial }: Props) {
 
   const [date, setDate] = useState(initial?.date || today());
   const [dueDate, setDueDate] = useState(initial?.due_date || addDays(today(), 14));
+  const [isPaid, setIsPaid] = useState(initial?.status === "paid");
   const [customerName, setCustomerName] = useState(initial?.customer_name || "");
 
   const parsed = initial?.customer_address ? parseAddress(initial.customer_address) : null;
@@ -75,6 +76,9 @@ export default function InvoiceForm({ initial }: Props) {
   const [savingDraft, setSavingDraft] = useState(false);
   const [savedId, setSavedId] = useState(initial?.id || "");
   const [invoiceNumber, setInvoiceNumber] = useState<string | undefined>(initial?.invoice_number);
+
+  const [parsingReceipt, setParsingReceipt] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
@@ -260,6 +264,38 @@ export default function InvoiceForm({ initial }: Props) {
     }
   }
 
+  async function handleReceiptUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setParsingReceipt(true);
+    try {
+      const fd = new FormData();
+      fd.append("receipt", file);
+      const res = await fetch("/api/parse-receipt", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { alert("Could not read receipt: " + json.error); return; }
+      const parsed: InvoiceItem[] = (json.items as Array<{qty:string; description:string; vat_rate:string; sum:number}>).map((item) => {
+        const gross = item.sum;
+        const qty = parseNum(item.qty);
+        const vat = parseNum(item.vat_rate);
+        const netUnit = qty > 0 ? Math.round(gross / qty / (1 + vat / 100) * 100) / 100 : 0;
+        return {
+          qty: item.qty,
+          description: item.description,
+          vat_rate: item.vat_rate,
+          price: String(netUnit),
+          sum: String(gross),
+        };
+      });
+      setItems(parsed.length > 0 ? parsed : [EMPTY_ITEM()]);
+    } catch (err) {
+      alert("Upload failed: " + err);
+    } finally {
+      setParsingReceipt(false);
+    }
+  }
+
   function addRow() {
     setItems((prev) => [...prev, EMPTY_ITEM()]);
   }
@@ -289,7 +325,7 @@ export default function InvoiceForm({ initial }: Props) {
       items: activeItems,
       tip_percent: tipEnabled ? tipPercent : "0",
       lang,
-      status: initial?.status,
+      status: isPaid ? "paid" : initial?.status,
     };
   }
 
@@ -360,7 +396,7 @@ export default function InvoiceForm({ initial }: Props) {
         tip_percent: tipPctVal,
         lang: invoice.lang,
         total: totalVal,
-        status: initial?.status === "paid" ? "paid" : "draft",
+        status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
         updated_at: new Date().toISOString(),
       }).eq("id", id);
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
@@ -377,7 +413,7 @@ export default function InvoiceForm({ initial }: Props) {
         tip_percent: tipPctVal,
         lang: invoice.lang,
         total: totalVal,
-        status: "draft",
+        status: isPaid ? "paid" : "draft",
       }).select("id").single();
       if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
       id = data?.id;
@@ -476,14 +512,35 @@ export default function InvoiceForm({ initial }: Props) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Due date</label>
-            <input
-              type="text"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-              placeholder="DD.MM.YYYY"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-500">
+                {isPaid ? "Payment status" : "Due date"}
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsPaid(p => !p)}
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors ${
+                  isPaid
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                }`}
+              >
+                {isPaid ? "✓ Paid" : "Mark as paid"}
+              </button>
+            </div>
+            {isPaid ? (
+              <div className="w-full border border-green-200 bg-green-50 rounded-lg px-3 py-2.5 text-sm text-green-700 font-semibold">
+                ✓ Already paid
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
+                placeholder="DD.MM.YYYY"
+              />
+            )}
           </div>
         </div>
 
@@ -612,9 +669,38 @@ export default function InvoiceForm({ initial }: Props) {
 
         {/* Items */}
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-2 mb-4">
-            Items
-          </p>
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Items
+            </p>
+            <div>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={handleReceiptUpload}
+              />
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                disabled={parsingReceipt}
+                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {parsingReceipt ? (
+                  <>
+                    <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Reading receipt…
+                  </>
+                ) : (
+                  <>📷 Import from receipt</>
+                )}
+              </button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
