@@ -195,7 +195,7 @@ export default function NewBewirtungsbelegPage() {
       <div className="bg-white rounded-2xl p-8 mb-6" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.07)" }}>
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-5">1. Items</p>
 
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs font-semibold text-gray-400 border-b border-gray-100">
