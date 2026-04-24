@@ -22,8 +22,9 @@ export async function POST(req: NextRequest) {
 
     const pdfBytes = await buildBewirtungsbelegPdf(items, date, company, customerAddress);
     const filename  = `Bewirtungsbeleg_${date}.pdf`;
+    const pdfBuffer = pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength);
 
-    return new Response(pdfBytes, {
+    return new Response(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
