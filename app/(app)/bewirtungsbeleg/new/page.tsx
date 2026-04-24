@@ -52,9 +52,12 @@ export default function NewBewirtungsbelegPage() {
   const [date, setDate] = useState(todayISO());
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
   const [sending, setSending] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [draftSaved, setDraftSaved] = useState(false);
 
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [suggestions, setSuggestions] = useState<{ items: CatalogItem[]; rowIdx: number } | null>(null);
@@ -67,6 +70,18 @@ export default function NewBewirtungsbelegPage() {
 
   useEffect(() => {
     supabase.from("catalog_items").select("*").order("name").then(({ data }) => setCatalog(data || []));
+    // Restore draft if present
+    try {
+      const raw = localStorage.getItem("bewirtungsbeleg_draft");
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.items)           setItems(d.items);
+        if (d.date)            setDate(d.date);
+        if (d.customerEmail)   setCustomerEmail(d.customerEmail);
+        if (d.customerName)    setCustomerName(d.customerName);
+        if (d.customerAddress) setCustomerAddress(d.customerAddress);
+      }
+    } catch { /* ignore */ }
   }, []);
 
   function setItem(idx: number, patch: Partial<Item>) {
@@ -146,6 +161,49 @@ export default function NewBewirtungsbelegPage() {
   }
   const totalGross = net7 + vat7 + net19 + vat19;
 
+  function saveDraft() {
+    try {
+      localStorage.setItem("bewirtungsbeleg_draft", JSON.stringify({
+        items, date, customerEmail, customerName, customerAddress,
+      }));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+    } catch { /* ignore */ }
+  }
+
+  async function handleDownload() {
+    if (filledItems.length === 0) return;
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/download-bewirtungsbeleg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: filledItems.map(it => ({
+            qty: it.qty || "1",
+            description: it.description,
+            vat_rate: it.vat_rate,
+            sum: rowGross(it),
+          })),
+          date,
+          customerAddress: customerAddress || undefined,
+        }),
+      });
+      if (!res.ok) { alert("Download failed."); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `Bewirtungsbeleg_${date}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Download failed. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function handleSend() {
     if (!customerEmail || filledItems.length === 0) return;
     setSending(true);
@@ -179,6 +237,7 @@ export default function NewBewirtungsbelegPage() {
           date,
           customerEmail,
           customerName: customerName || undefined,
+          customerAddress: customerAddress || undefined,
         }),
       });
       const data = await res.json();
@@ -196,8 +255,10 @@ export default function NewBewirtungsbelegPage() {
     setDate(todayISO());
     setCustomerEmail("");
     setCustomerName("");
+    setCustomerAddress("");
     setSent(false);
     setSendError("");
+    try { localStorage.removeItem("bewirtungsbeleg_draft"); } catch { /* ignore */ }
   }
 
   return (
@@ -392,7 +453,20 @@ export default function NewBewirtungsbelegPage() {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-              Customer Email <span className="text-red-400">*</span>
+              Customer Address <span className="font-normal text-gray-400">(optional — shown on PDF)</span>
+            </label>
+            <textarea
+              value={customerAddress}
+              onChange={e => setCustomerAddress(e.target.value)}
+              placeholder={"Musterstraße 1\n10115 Berlin"}
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+              Customer Email <span className="font-normal text-gray-400">(required to send)</span>
             </label>
             <input
               type="email"
@@ -406,15 +480,33 @@ export default function NewBewirtungsbelegPage() {
 
         {sendError && <p className="mt-4 text-sm text-red-600">{sendError}</p>}
 
+        {/* Action buttons */}
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={saveDraft}
+            disabled={filledItems.length === 0}
+            className="flex-1 py-3 rounded-xl text-sm font-bold border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+          >
+            {draftSaved ? "✓ Saved" : "Save Draft"}
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={downloading || filledItems.length === 0}
+            className="flex-1 py-3 rounded-xl text-sm font-bold border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+          >
+            {downloading ? "Generating…" : "⬇ Download PDF"}
+          </button>
+        </div>
+
         {sent ? (
-          <div className="mt-6 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm font-semibold">
+          <div className="mt-3 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm font-semibold">
             ✓ Bewirtungsbeleg sent to {customerEmail}
           </div>
         ) : (
           <button
             onClick={handleSend}
             disabled={sending || !customerEmail || filledItems.length === 0}
-            className="mt-6 w-full py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="mt-3 w-full py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: "#1a1a1a", color: "#fff" }}
           >
             {sending ? "Sending…" : "Send Bewirtungsbeleg"}
