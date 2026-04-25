@@ -207,8 +207,8 @@ export async function buildBewirtungsbelegPdf(
     fy -= 5;
     const tf = form.createTextField(name);
     if (multi) tf.enableMultiline();
-    tf.setFontSize(9);
     tf.addToPage(fp, { x: MX, y: fy - h, width: CW, height: h, borderWidth: 0.5, borderColor: fieldBorder, backgroundColor: fieldBg });
+    tf.updateAppearances(reg);
     fy -= h + 14;
   }
 
