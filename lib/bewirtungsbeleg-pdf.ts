@@ -9,10 +9,10 @@ export interface BewItem {
 
 export interface BewCompany {
   name: string;
-  address: string;
-  vat?: string;
-  tax?: string;
-  iban?: string;
+  address?: string | null;
+  vat?: string | null;
+  tax?: string | null;
+  iban?: string | null;
 }
 
 function fmt(n: number) {
@@ -83,9 +83,9 @@ export async function buildBewirtungsbelegPdf(
     }
     // Right column starts at same y
     page.drawText("Bewirtungslokal:", { x: colMid, y, size: 8, font: bold, color: dgray });
-    page.drawText(company.name, { x: colMid + 92, y, size: 9, font: bold, color: black });
+    page.drawText(company.name ?? "", { x: colMid + 92, y, size: 9, font: bold, color: black });
     y -= 13;
-    page.drawText(company.address, { x: colMid + 92, y, size: 8, font: reg, color: black });
+    if (company.address) page.drawText(company.address, { x: colMid + 92, y, size: 8, font: reg, color: black });
     y -= 13;
     const vatTax = [
       company.vat ? `USt-IdNr.: ${company.vat}` : "",
@@ -99,9 +99,9 @@ export async function buildBewirtungsbelegPdf(
   } else {
     // Full-width restaurant info
     page.drawText("Bewirtungslokal:", { x: MX, y, size: 8, font: bold, color: dgray });
-    page.drawText(company.name, { x: MX + 92, y, size: 9, font: bold, color: black });
+    page.drawText(company.name ?? "", { x: MX + 92, y, size: 9, font: bold, color: black });
     y -= 13;
-    page.drawText(company.address, { x: MX + 92, y, size: 8.5, font: reg, color: black });
+    if (company.address) page.drawText(company.address, { x: MX + 92, y, size: 8.5, font: reg, color: black });
     y -= 13;
     const vatTax = [
       company.vat ? `USt-IdNr.: ${company.vat}` : "",
@@ -182,7 +182,7 @@ export async function buildBewirtungsbelegPdf(
   page.drawText("Gesamtbetrag:", { x: MX, y, size: 11, font: bold, color: black });
   page.drawText(totalStr, { x: W - MX - bold.widthOfTextAtSize(totalStr, 11), y, size: 11, font: bold, color: black });
   y -= 15;
-  page.drawText("✓ Bar bezahlt", { x: MX, y, size: 9, font: bold, color: green });
+  page.drawText("Bar bezahlt", { x: MX, y, size: 9, font: bold, color: green });
 
   // ── Fillable customer section ──────────────────────────────────────────────────
   let fp = page;
@@ -228,7 +228,7 @@ export async function buildBewirtungsbelegPdf(
   fp.drawLine({ start: { x: MX + 215, y: fy }, end: { x: W - MX, y: fy }, thickness: 0.5, color: rgb(0.5, 0.5, 0.5) });
 
   // ── Footer ─────────────────────────────────────────────────────────────────────
-  const footerText = [company.name, company.address, company.iban ? `IBAN: ${company.iban}` : ""]
+  const footerText = [company.name ?? "", company.address ?? "", company.iban ? `IBAN: ${company.iban}` : ""]
     .filter(Boolean).join("  ·  ");
   const footerX = W / 2 - reg.widthOfTextAtSize(footerText, 7) / 2;
 
