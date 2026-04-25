@@ -189,7 +189,11 @@ export default function NewBewirtungsbelegPage() {
           customerAddress: customerAddress || undefined,
         }),
       });
-      if (!res.ok) { alert("Download failed."); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        setSendError(`Download failed: ${errData?.error || res.statusText}`);
+        return;
+      }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
