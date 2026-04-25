@@ -165,11 +165,40 @@ export default function NewBewirtungsbelegPage() {
   const totalGross = net7 + vat7 + net19 + vat19;
   const grandTotal = totalGross + tipAmt;
 
-  function saveDraft() {
+  // Sanitize a string for use in a filename
+  function toFilename(s: string): string {
+    return s.trim().replace(/[^a-zA-Z0-9äöüÄÖÜß\- ]/g, "").replace(/\s+/g, "_").slice(0, 40);
+  }
+
+  function pdfFilename(): string {
+    const parts = ["Bewirtungsbeleg", date];
+    if (customerName.trim()) parts.push(toFilename(customerName));
+    return parts.join("_") + ".pdf";
+  }
+
+  // Save new descriptions to catalog
+  async function syncCatalog() {
+    const existingNames = new Set(catalog.map(c => c.name.toLowerCase()));
+    for (const it of filledItems) {
+      if (!existingNames.has(it.description.toLowerCase().trim())) {
+        const qty = parseNum(it.qty) || 1;
+        const net = parseNum(it.price) || rowNet(it) / qty;
+        await supabase.from("catalog_items").insert({
+          name: it.description.trim(),
+          vat_rate: parseNum(it.vat_rate),
+          price: net > 0 ? net : null,
+        });
+        existingNames.add(it.description.toLowerCase().trim());
+      }
+    }
+  }
+
+  async function saveDraft() {
     try {
       localStorage.setItem("bewirtungsbeleg_draft", JSON.stringify({
         items, tip, date, customerEmail, customerName, customerAddress,
       }));
+      await syncCatalog();
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
     } catch { /* ignore */ }
@@ -178,6 +207,8 @@ export default function NewBewirtungsbelegPage() {
   async function handleDownload() {
     if (filledItems.length === 0) return;
     setDownloading(true);
+    setSendError("");
+    await syncCatalog();
     try {
       const res = await fetch("/api/download-bewirtungsbeleg", {
         method: "POST",
@@ -203,11 +234,11 @@ export default function NewBewirtungsbelegPage() {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = `Bewirtungsbeleg_${date}.pdf`;
+      a.download = pdfFilename();
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Download failed. Please try again.");
+      setSendError("Download failed. Please try again.");
     } finally {
       setDownloading(false);
     }
@@ -217,20 +248,7 @@ export default function NewBewirtungsbelegPage() {
     if (!customerEmail || filledItems.length === 0) return;
     setSending(true);
     setSendError("");
-
-    // Auto-create new catalog items
-    const existingNames = new Set(catalog.map(c => c.name.toLowerCase()));
-    for (const it of filledItems) {
-      if (!existingNames.has(it.description.toLowerCase().trim())) {
-        const qty = parseNum(it.qty) || 1;
-        const net = parseNum(it.price) || rowNet(it) / qty;
-        await supabase.from("catalog_items").insert({
-          name: it.description.trim(),
-          vat_rate: parseNum(it.vat_rate),
-          price: net > 0 ? net : null,
-        });
-      }
-    }
+    await syncCatalog();
 
     try {
       const res = await fetch("/api/send-bewirtungsbeleg", {
