@@ -49,6 +49,7 @@ export default function NewBewirtungsbelegPage() {
   const supabase = createClient();
 
   const [items, setItems] = useState<Item[]>([EMPTY_ITEM()]);
+  const [tip, setTip] = useState("");
   const [date, setDate] = useState(todayISO());
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -76,6 +77,7 @@ export default function NewBewirtungsbelegPage() {
       if (raw) {
         const d = JSON.parse(raw);
         if (d.items)           setItems(d.items);
+        if (d.tip)             setTip(d.tip);
         if (d.date)            setDate(d.date);
         if (d.customerEmail)   setCustomerEmail(d.customerEmail);
         if (d.customerName)    setCustomerName(d.customerName);
@@ -152,6 +154,7 @@ export default function NewBewirtungsbelegPage() {
 
   // Totals
   const filledItems = items.filter(it => it.description.trim());
+  const tipAmt = parseNum(tip);
   let net7 = 0, vat7 = 0, net19 = 0, vat19 = 0;
   for (const it of filledItems) {
     const gross = rowGross(it);
@@ -160,11 +163,12 @@ export default function NewBewirtungsbelegPage() {
     else { net19 += net; vat19 += gross - net; }
   }
   const totalGross = net7 + vat7 + net19 + vat19;
+  const grandTotal = totalGross + tipAmt;
 
   function saveDraft() {
     try {
       localStorage.setItem("bewirtungsbeleg_draft", JSON.stringify({
-        items, date, customerEmail, customerName, customerAddress,
+        items, tip, date, customerEmail, customerName, customerAddress,
       }));
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
@@ -187,6 +191,7 @@ export default function NewBewirtungsbelegPage() {
           })),
           date,
           customerAddress: customerAddress || undefined,
+          tip: tipAmt > 0 ? tipAmt : undefined,
         }),
       });
       if (!res.ok) {
@@ -242,6 +247,7 @@ export default function NewBewirtungsbelegPage() {
           customerEmail,
           customerName: customerName || undefined,
           customerAddress: customerAddress || undefined,
+          tip: tipAmt > 0 ? tipAmt : undefined,
         }),
       });
       const data = await res.json();
@@ -256,6 +262,7 @@ export default function NewBewirtungsbelegPage() {
 
   function reset() {
     setItems([EMPTY_ITEM()]);
+    setTip("");
     setDate(todayISO());
     setCustomerEmail("");
     setCustomerName("");
@@ -381,6 +388,21 @@ export default function NewBewirtungsbelegPage() {
           + Add row
         </button>
 
+        {/* Trinkgeld row */}
+        <div className="mt-4 flex items-center gap-3">
+          <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">
+            Trinkgeld <span className="font-normal text-gray-400">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={tip}
+            onChange={e => setTip(e.target.value)}
+            placeholder="0,00"
+            className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right outline-none focus:border-gray-700 bg-gray-50"
+          />
+          <span className="text-xs text-gray-400">Kein MwSt-Anteil — wird separat ausgewiesen</span>
+        </div>
+
         {/* VAT breakdown */}
         {totalGross !== 0 && (
           <div className="mt-6 pt-4 border-t border-gray-100 space-y-1.5">
@@ -396,9 +418,15 @@ export default function NewBewirtungsbelegPage() {
                 <span>MwSt 19%: <span className="text-gray-600 font-medium">{fmt(vat19)}</span></span>
               </div>
             )}
+            {tipAmt > 0 && (
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>Rechnungsbetrag: <span className="text-gray-600 font-medium">{fmt(totalGross)}</span></span>
+                <span>Trinkgeld: <span className="text-gray-600 font-medium">{fmt(tipAmt)}</span></span>
+              </div>
+            )}
             <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-              <span className="text-sm font-semibold text-gray-500">Total (gross)</span>
-              <span className="font-bold text-gray-900 text-base">{fmt(totalGross)}</span>
+              <span className="text-sm font-semibold text-gray-500">Gesamtbetrag</span>
+              <span className="font-bold text-gray-900 text-base">{fmt(grandTotal)}</span>
             </div>
           </div>
         )}

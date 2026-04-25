@@ -4,10 +4,11 @@ import { buildBewirtungsbelegPdf, type BewItem } from "@/lib/bewirtungsbeleg-pdf
 
 export async function POST(req: NextRequest) {
   try {
-    const { items, date, customerAddress } = await req.json() as {
+    const { items, date, customerAddress, tip } = await req.json() as {
       items: BewItem[];
       date: string;
       customerAddress?: string;
+      tip?: number;
     };
 
     if (!items?.length) {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "Company settings not found" }), { status: 400 });
     }
 
-    const pdfBytes = await buildBewirtungsbelegPdf(items, date, company, customerAddress);
+    const pdfBytes = await buildBewirtungsbelegPdf(items, date, company, customerAddress, tip);
     const filename  = `Bewirtungsbeleg_${date}.pdf`;
 
     return new Response(new Uint8Array(pdfBytes), {

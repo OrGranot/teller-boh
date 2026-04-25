@@ -7,12 +7,13 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
-    const { items, date, customerEmail, customerName, customerAddress } = await req.json() as {
+    const { items, date, customerEmail, customerName, customerAddress, tip } = await req.json() as {
       items: BewItem[];
       date: string;
       customerEmail: string;
       customerName?: string;
       customerAddress?: string;
+      tip?: number;
     };
 
     if (!customerEmail) return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { data: company } = await supabase.from("company_settings").select("*").limit(1).single();
     if (!company) return NextResponse.json({ error: "Company settings not found" }, { status: 400 });
 
-    const pdfBytes = await buildBewirtungsbelegPdf(items, date, company, customerAddress);
+    const pdfBytes = await buildBewirtungsbelegPdf(items, date, company, customerAddress, tip);
 
     const dateDisplay = date.split("-").reverse().join(".");
     const greeting    = customerName ? `Guten Tag ${customerName},` : "Guten Tag,";
@@ -34,7 +35,9 @@ export async function POST(req: NextRequest) {
       html: `
         <p>${greeting}</p>
         <p>anbei erhalten Sie Ihren Bewirtungsbeleg vom ${dateDisplay}.</p>
-        <p>Bitte füllen Sie die markierten Felder aus (Bewirtender, Unternehmen, Anlass der Bewirtung, Teilnehmer und Unterschrift) und bewahren Sie das Dokument für Ihre steuerlichen Unterlagen auf.</p>
+        <p>Bitte füllen Sie die markierten Felder aus (Bewirtender, Unternehmen, Anlass der Bewirtung, Teilnehmer und Unterschrift) und unterschreiben Sie das Dokument.</p>
+        <p><strong>Wichtig:</strong> Bitte heften Sie diesen Bewirtungsbeleg zusammen mit dem maschinell erstellten Kassenbon/der Rechnung ab – beide Dokumente zusammen sind für die steuerliche Anerkennung gemäß § 4 Abs. 5 Nr. 2 EStG erforderlich.</p>
+        <p>Beim Ausfüllen des Anlasses beachten Sie bitte: Der geschäftliche Zweck muss konkret und spezifisch angegeben werden (z. B. nicht „Kundenpflege", sondern den tatsächlichen Anlass). Bewahren Sie das vollständig ausgefüllte Dokument mindestens 10 Jahre auf.</p>
         <p>Bei Rückfragen stehen wir Ihnen gerne zur Verfügung.</p>
         <br />
         <p>Mit freundlichen Grüßen,<br /><strong>${company.name}</strong></p>

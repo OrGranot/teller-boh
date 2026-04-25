@@ -23,7 +23,8 @@ export async function buildBewirtungsbelegPdf(
   items: BewItem[],
   dateStr: string,
   company: BewCompany,
-  customerAddress?: string
+  customerAddress?: string,
+  tip?: number
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const reg  = await doc.embedFont(StandardFonts.Helvetica);
@@ -178,7 +179,24 @@ export async function buildBewirtungsbelegPdf(
   page.drawLine({ start: { x: MX, y }, end: { x: W - MX, y }, thickness: 1, color: rgb(0.22, 0.22, 0.22) });
   y -= 16;
 
-  const totalStr = fmt(totalGross);
+  // ── Tip (Trinkgeld) — shown before grand total if present ─────────────────────
+  const tipAmt = tip && tip > 0 ? tip : 0;
+  if (tipAmt > 0) {
+    const subtotalStr = fmt(totalGross);
+    page.drawText("Rechnungsbetrag:", { x: MX, y, size: 9, font: reg, color: dgray });
+    page.drawText(subtotalStr, { x: W - MX - reg.widthOfTextAtSize(subtotalStr, 9), y, size: 9, font: reg, color: black });
+    y -= 13;
+
+    const tipStr = fmt(tipAmt);
+    page.drawText("Trinkgeld (kein MwSt-Anteil):", { x: MX, y, size: 9, font: reg, color: dgray });
+    page.drawText(tipStr, { x: W - MX - reg.widthOfTextAtSize(tipStr, 9), y, size: 9, font: reg, color: black });
+    y -= 6;
+    page.drawLine({ start: { x: MX, y }, end: { x: W - MX, y }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
+    y -= 14;
+  }
+
+  const grandTotal = totalGross + tipAmt;
+  const totalStr = fmt(grandTotal);
   page.drawText("Gesamtbetrag:", { x: MX, y, size: 11, font: bold, color: black });
   page.drawText(totalStr, { x: W - MX - bold.widthOfTextAtSize(totalStr, 11), y, size: 11, font: bold, color: black });
   y -= 15;
@@ -202,8 +220,12 @@ export async function buildBewirtungsbelegPdf(
 
   const form = doc.getForm();
 
-  function drawField(label: string, name: string, h: number, multi = false): void {
+  function drawField(label: string, name: string, h: number, multi = false, hint?: string): void {
     fp.drawText(label, { x: MX, y: fy, size: 8, font: bold, color: dgray });
+    if (hint) {
+      const labelW = bold.widthOfTextAtSize(label, 8);
+      fp.drawText(hint, { x: MX + labelW + 6, y: fy, size: 7, font: reg, color: rgb(0.65, 0.35, 0.1) });
+    }
     fy -= 5;
     const tf = form.createTextField(name);
     if (multi) tf.enableMultiline();
@@ -216,7 +238,13 @@ export async function buildBewirtungsbelegPdf(
   fy -= 2;
   drawField("Unternehmen / Firma:", "bewirtender_firma", 22);
   fy -= 2;
-  drawField("Anlass der Bewirtung (geschäftlicher Zweck):", "anlass", 34, true);
+  drawField(
+    "Anlass der Bewirtung (geschäftlicher Zweck):",
+    "anlass",
+    34,
+    true,
+    "Bitte konkret angeben — z. B. nicht 'Kundenpflege'"
+  );
   fy -= 2;
   drawField("Teilnehmer der Bewirtung (alle Namen und Unternehmen, inkl. Bewirtender):", "teilnehmer", 54, true);
   fy -= 10;
