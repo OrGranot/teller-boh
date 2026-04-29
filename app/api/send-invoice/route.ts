@@ -3,14 +3,18 @@ import { renderToBuffer } from "@react-pdf/renderer";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const React = require("react");
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
 import InvoicePDF from "@/components/InvoicePDF";
 import type { Invoice, CompanySettings } from "@/lib/types";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "invoices@tellerberlin.com";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { invoice }: { invoice: Invoice } = await req.json();
 
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Recipient email is required." }, { status: 400 });
     }
 
-    const supabase = await createClient();
+    const supabase = auth.supabase;
 
     // ── Load company settings ────────────────────────────────────────────────
     const { data: company } = await supabase
@@ -138,7 +142,7 @@ export async function POST(req: NextRequest) {
 
     await resend.emails.send({
       to: invoice.customer_email,
-      from: `${company.name} <hello@tellerberlin.com>`,
+      from: `${company.name} <${FROM_EMAIL}>`,
       subject,
       text: body,
       attachments: [
@@ -156,6 +160,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Send invoice error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Failed to send invoice. Please try again." }, { status: 500 });
   }
 }

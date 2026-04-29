@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
 
 export async function POST() {
-  const supabase = await createClient();
-  const number = await getNextInvoiceNumber(supabase);
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
+  const number = await getNextInvoiceNumber(auth.supabase);
   return NextResponse.json({ number });
 }

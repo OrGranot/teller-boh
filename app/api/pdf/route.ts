@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const React = require("react");
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
 import InvoicePDF from "@/components/InvoicePDF";
 import type { Invoice, CompanySettings } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { invoice }: { invoice: Invoice } = await req.json();
-    const supabase = await createClient();
+    const supabase = auth.supabase;
 
     // ── Load company settings ────────────────────────────────────────────────
     const { data: company } = await supabase
@@ -144,6 +147,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("PDF generation error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Failed to generate PDF. Please try again." }, { status: 500 });
   }
 }

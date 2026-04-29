@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { requireAuth } from "@/lib/supabase/require-auth";
 
 export const dynamic = "force-dynamic";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const formData = await req.formData();
     const file = formData.get("receipt") as File | null;
@@ -23,7 +27,7 @@ export async function POST(req: NextRequest) {
       : { type: "image", source: { type: "base64", media_type: (file.type || "image/jpeg") as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: base64 } };
 
     const message = await client.messages.create({
-      model: "claude-opus-4-5",
+      model: "claude-opus-4-6",
       max_tokens: 2048,
       messages: [
         {

@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PDFDocument = require("pdfkit");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const QRCode = require("qrcode");
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://cheery-lolly-7b09bd.netlify.app";
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = auth.supabase;
 
   const { data: voucher, error } = await supabase
     .from("vouchers")
@@ -41,7 +46,7 @@ async function generateVoucherPDF(data: {
   personal_message?: string | null;
   valid_until?: string | null;
 }) {
-  const redeemUrl = `https://cheery-lolly-7b09bd.netlify.app/redeem/${data.voucher_code}`;
+  const redeemUrl = `${APP_URL}/redeem/${data.voucher_code}`;
   const qrBuffer = await QRCode.toBuffer(redeemUrl, {
     width: 120,
     margin: 1,

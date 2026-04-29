@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 import { buildBewirtungsbelegPdf, type BewItem } from "@/lib/bewirtungsbeleg-pdf";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "invoices@tellerberlin.com";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { items, date, customerEmail, customerName, customerAddress, tip } = await req.json() as {
       items: BewItem[];
@@ -19,7 +23,7 @@ export async function POST(req: NextRequest) {
     if (!customerEmail) return NextResponse.json({ error: "Email is required" }, { status: 400 });
     if (!items?.length)  return NextResponse.json({ error: "No items provided" }, { status: 400 });
 
-    const supabase = await createClient();
+    const supabase = auth.supabase;
     const { data: company } = await supabase.from("company_settings").select("*").limit(1).single();
     if (!company) return NextResponse.json({ error: "Company settings not found" }, { status: 400 });
 
@@ -29,7 +33,7 @@ export async function POST(req: NextRequest) {
     const greeting    = customerName ? `Guten Tag ${customerName},` : "Guten Tag,";
 
     await resend.emails.send({
-      from: `${company.name} <invoices@tellerberlin.com>`,
+      from: `${company.name} <${FROM_EMAIL}>`,
       to: customerEmail,
       subject: `Ihr Bewirtungsbeleg vom ${dateDisplay} – ${company.name}`,
       html: `
@@ -48,6 +52,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("send-bewirtungsbeleg error:", err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: "Failed to send Bewirtungsbeleg. Please try again." }, { status: 500 });
   }
 }

@@ -1,8 +1,11 @@
-import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/supabase/require-auth";
 import { buildBewirtungsbelegPdf, type BewItem } from "@/lib/bewirtungsbeleg-pdf";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { items, date, customerAddress, tip } = await req.json() as {
       items: BewItem[];
@@ -15,7 +18,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "No items provided" }), { status: 400 });
     }
 
-    const supabase = await createClient();
+    const supabase = auth.supabase;
     const { data: company } = await supabase.from("company_settings").select("*").limit(1).single();
     if (!company) {
       return new Response(JSON.stringify({ error: "Company settings not found" }), { status: 400 });
@@ -32,6 +35,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("download-bewirtungsbeleg error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Failed to generate PDF. Please try again." }), { status: 500 });
   }
 }
