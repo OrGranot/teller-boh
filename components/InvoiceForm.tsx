@@ -77,6 +77,7 @@ export default function InvoiceForm({ initial }: Props) {
   const [savedId, setSavedId] = useState(initial?.id || "");
   const [invoiceNumber, setInvoiceNumber] = useState<string | undefined>(initial?.invoice_number);
 
+  const [notes, setNotes] = useState(initial?.notes || "");
   const [parsingReceipt, setParsingReceipt] = useState(false);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
@@ -326,6 +327,7 @@ export default function InvoiceForm({ initial }: Props) {
       tip_percent: tipEnabled ? tipPercent : "0",
       lang,
       status: isPaid ? "paid" : initial?.status,
+      notes: notes.trim() || undefined,
     };
   }
 
@@ -397,6 +399,7 @@ export default function InvoiceForm({ initial }: Props) {
         lang: invoice.lang,
         total: totalVal,
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
+        notes: notes.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq("id", id);
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
@@ -414,6 +417,7 @@ export default function InvoiceForm({ initial }: Props) {
         lang: invoice.lang,
         total: totalVal,
         status: isPaid ? "paid" : "draft",
+        notes: notes.trim() || null,
       }).select("id").single();
       if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
       id = data?.id;
@@ -858,6 +862,20 @@ export default function InvoiceForm({ initial }: Props) {
             <span>Total</span>
             <span className="w-28 text-right">{formatEuro(total)}</span>
           </div>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-2 mb-4">
+            Notes
+          </p>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50 resize-none"
+            placeholder="Payment instructions, bank details, thank-you note…"
+          />
         </div>
       </div>
 

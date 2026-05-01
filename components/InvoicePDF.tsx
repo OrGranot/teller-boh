@@ -78,6 +78,10 @@ const s = StyleSheet.create({
   // Total
   totalRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 12 },
   totalText: { fontSize: 12, fontFamily: "Helvetica-Bold" },
+  // Notes
+  notesRow: { marginTop: 14 },
+  notesLabel: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#888", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 },
+  notesText: { fontSize: 9.5, fontFamily: "Helvetica-Oblique", color: "#444", lineHeight: 1.5 },
   // Due date
   dueRow: { marginTop: 10 },
   dueText: { fontSize: 10 },
@@ -218,6 +222,14 @@ export default function InvoicePDF({ invoice, company, logoBase64 }: Props) {
         <View style={s.totalRow}>
           <Text style={s.totalText}>{L.total}:  {formatEuro(total)}</Text>
         </View>
+
+        {/* ── Notes ── */}
+        {invoice.notes && (
+          <View style={s.notesRow}>
+            <Text style={s.notesLabel}>Notes</Text>
+            <Text style={s.notesText}>{invoice.notes}</Text>
+          </View>
+        )}
 
         {/* ── Due Date / Paid ── */}
         <View style={s.dueRow}>

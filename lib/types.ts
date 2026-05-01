@@ -60,5 +60,6 @@ export interface Invoice {
   status?: "draft" | "sent" | "paid";
   total?: number;
   items: InvoiceItem[];
+  notes?: string;
   created_at?: string;
 }
