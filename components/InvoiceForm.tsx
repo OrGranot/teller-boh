@@ -431,6 +431,7 @@ export default function InvoiceForm({ initial }: Props) {
         description: item.description,
         price: parseNum(item.price),
         vat_rate: parseNum(item.vat_rate),
+        sum: parseNum(item.sum || "") || null,
         sort_order: idx,
       }));
       if (itemRows.length > 0) {

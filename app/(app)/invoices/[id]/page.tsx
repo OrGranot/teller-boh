@@ -31,7 +31,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     description: li.description ?? "",
     price: String(li.price ?? "0"),
     vat_rate: String(li.vat_rate ?? "7"),
-    sum: "",
+    sum: li.sum != null ? String(li.sum) : "",
   }));
 
   const invoice: Invoice = {
@@ -48,6 +48,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
     tip_percent: String(inv.tip_percent ?? "0"),
     lang: (inv.lang || "de") as "de" | "en",
     status: inv.status,
+    notes: inv.notes || "",
     items: items.length > 0 ? items : [
       { qty: "1", description: "", price: "", vat_rate: "7" },
     ],
