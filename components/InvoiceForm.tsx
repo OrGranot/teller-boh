@@ -896,16 +896,32 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
           </label>
           {tipEnabled && (
             <div className="flex items-center gap-2">
-              {/* Mode toggle */}
+              {/* Mode toggle — converts the value when switching */}
               <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
                 <button
                   type="button"
-                  onClick={() => setTipMode("percent")}
+                  onClick={() => {
+                    if (tipMode === "amount") {
+                      // € → %: convert fixed amount to percentage
+                      const pct = subtotal > 0
+                        ? Math.round(parseNum(tipFixed) / subtotal * 1000) / 10
+                        : 0;
+                      setTipPercent(pct > 0 ? String(pct) : "");
+                    }
+                    setTipMode("percent");
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${tipMode === "percent" ? "bg-gray-800 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
                 >%</button>
                 <button
                   type="button"
-                  onClick={() => setTipMode("amount")}
+                  onClick={() => {
+                    if (tipMode === "percent") {
+                      // % → €: convert percentage to fixed amount
+                      const amt = Math.round(subtotal * parseNum(tipPercent) / 100 * 100) / 100;
+                      setTipFixed(amt > 0 ? String(amt) : "");
+                    }
+                    setTipMode("amount");
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${tipMode === "amount" ? "bg-gray-800 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
                 >€</button>
               </div>
