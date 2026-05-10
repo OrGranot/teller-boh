@@ -83,6 +83,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [items, setItems] = useState<InvoiceItem[]>(
     initial?.items?.length ? initial.items : [EMPTY_ITEM()]
   );
+  console.log("[InvoiceForm init] tip_percent:", initial?.tip_percent, "tip_amount:", initial?.tip_amount);
   const [tipEnabled, setTipEnabled] = useState(
     parseNum(initial?.tip_percent || "0") > 0 || parseNum(initial?.tip_amount || "0") > 0
   );
