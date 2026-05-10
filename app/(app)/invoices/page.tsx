@@ -225,7 +225,15 @@ export default function InvoicesPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-28" />   {/* # */}
+              <col />                     {/* Customer — fills remaining space */}
+              <col className="w-28" />   {/* Date */}
+              <col className="w-28" />   {/* Total */}
+              <col className="w-24" />   {/* Status */}
+              <col className="w-36" />   {/* Actions */}
+            </colgroup>
             <thead>
               <tr className="text-xs font-semibold text-gray-400 border-b border-gray-100">
                 <th className="text-left px-5 py-3">#</th>
@@ -242,28 +250,28 @@ export default function InvoicesPage() {
                   key={inv.id}
                   className={`group ${i < filtered.length - 1 ? "border-b border-gray-100" : ""} hover:bg-gray-50 transition-colors`}
                 >
-                  <td className="px-5 py-3.5 font-semibold text-gray-700">{inv.invoice_number}</td>
-                  <td className="px-3 py-3.5">
+                  <td className="px-5 py-3.5 font-semibold text-gray-700 whitespace-nowrap">{inv.invoice_number}</td>
+                  <td className="px-3 py-3.5 truncate">
                     <Link href={`/invoices/${inv.id}`} className="font-semibold hover:underline">
                       {inv.customer_name}
                     </Link>
                   </td>
-                  <td className="px-3 py-3.5 text-gray-500">{inv.date}</td>
-                  <td className="px-3 py-3.5 text-right font-semibold">{formatEuro(inv.total)}</td>
+                  <td className="px-3 py-3.5 text-gray-500 whitespace-nowrap">{inv.date}</td>
+                  <td className="px-3 py-3.5 text-right font-semibold whitespace-nowrap">{formatEuro(inv.total)}</td>
                   <td className="px-3 py-3.5 text-center">
                     {inv.status === "paid" ? (
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700">
-                        Bezahlt / Paid
+                      <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 whitespace-nowrap">
+                        ✓ Paid
                       </span>
                     ) : (
                       <select
                         value={inv.status}
                         onChange={(e) => updateStatus(inv.id, e.target.value as "draft" | "sent")}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 outline-none cursor-pointer ${STATUS_COLORS[inv.status]}`}
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 outline-none cursor-pointer w-full ${STATUS_COLORS[inv.status]}`}
                       >
-                        <option value="draft">Entwurf / Draft</option>
-                        <option value="sent">Versendet / Sent</option>
-                        <option value="paid">Bezahlt / Paid</option>
+                        <option value="draft">Draft</option>
+                        <option value="sent">Sent</option>
+                        <option value="paid">Paid</option>
                       </select>
                     )}
                   </td>
