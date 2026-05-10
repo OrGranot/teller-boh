@@ -448,7 +448,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         description: item.description,
         price: parseNum(item.price),
         vat_rate: parseNum(item.vat_rate),
-        sum: parseNum(item.sum || "") || null,
+        sum: calcRowSum(item) || null,
         sort_order: idx,
       }));
       if (itemRows.length > 0) {

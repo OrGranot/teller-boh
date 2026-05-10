@@ -64,14 +64,26 @@ export default async function EditInvoicePage({
     );
   }
 
-  const items: InvoiceItem[] = (lineItems || []).map((li) => ({
-    id: li.id,
-    qty: String(li.qty ?? "1"),
-    description: li.description ?? "",
-    price: String(li.price ?? "0"),
-    vat_rate: String(li.vat_rate ?? "7"),
-    sum: li.sum != null ? String(li.sum) : "",
-  }));
+  const items: InvoiceItem[] = (lineItems || []).map((li) => {
+    const qty = Number(li.qty ?? 1);
+    const price = Number(li.price ?? 0);
+    const vat = Number(li.vat_rate ?? 7);
+    // Always restore the exact saved gross; fall back to computing it if the
+    // DB row predates the sum column (i.e. sum is null but price is known).
+    const savedSum = li.sum != null ? Number(li.sum) : null;
+    const computedSum = Math.round(qty * price * (1 + vat / 100) * 100) / 100;
+    const sumStr = savedSum != null
+      ? String(savedSum)
+      : price > 0 ? String(computedSum) : "";
+    return {
+      id: li.id,
+      qty: String(qty),
+      description: li.description ?? "",
+      price: String(price),
+      vat_rate: String(vat),
+      sum: sumStr,
+    };
+  });
 
   const invoice: Invoice = {
     id: inv.id,
