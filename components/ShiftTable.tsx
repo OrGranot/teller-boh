@@ -4,6 +4,7 @@ import Link from "next/link";
 import TimeInput from "@/components/TimeInput";
 import { createClient } from "@/lib/supabase/client";
 import DepartmentTags from "@/components/DepartmentTags";
+import ConfirmModal from "@/components/ConfirmModal";
 
 // ── Types ─────────────────────────────────────────────────────
 export interface ShiftRow {
@@ -111,6 +112,7 @@ export default function ShiftTable({
 }: Props) {
   const supabase = createClient();
   const showEmployee = !!profilesMap;
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Editing
   const [editingCell, setEditingCell] = useState<EditKey | null>(null);
@@ -187,8 +189,8 @@ export default function ShiftTable({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this shift record?")) return;
     await fetch(`/api/shifts/${id}`, { method: "DELETE" });
+    setDeleteConfirm(null);
     onRefresh();
   }
 
@@ -384,7 +386,7 @@ export default function ShiftTable({
                             {saving === `${s.id}:clockout` ? "…" : "Clock out"}
                           </button>
                         )}
-                        <button onClick={() => handleDelete(s.id)}
+                        <button onClick={() => setDeleteConfirm(s.id)}
                           className="text-xs text-red-400 hover:text-red-600 font-semibold transition-colors">
                           Delete
                         </button>
@@ -450,7 +452,7 @@ export default function ShiftTable({
                                 {saving === `${s.id}:clockout` ? "…" : "Clock out"}
                               </button>
                             )}
-                            <button onClick={() => handleDelete(s.id)}
+                            <button onClick={() => setDeleteConfirm(s.id)}
                               className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
                               Delete
                             </button>
@@ -465,6 +467,17 @@ export default function ShiftTable({
           })}
         </tbody>
       </table>
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Delete shift record?"
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(deleteConfirm)}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
     </div>
   );
 }

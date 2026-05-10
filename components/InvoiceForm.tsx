@@ -5,6 +5,25 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatEuro, parseNum, today, addDays, LABELS } from "@/lib/format";
 import type { Contact, CatalogItem, Invoice, InvoiceItem } from "@/lib/types";
+import DatePicker from "@/components/DatePicker";
+import CustomerFields, { type ContactSuggestion } from "@/components/CustomerFields";
+
+// DD.MM.YYYY ↔ YYYY-MM-DD helpers for DatePicker
+function deToIso(de: string): string {
+  const [d, m, y] = de.split(".");
+  if (!d || !m || !y) return "";
+  return `${y.padStart(4, "20")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+function isoToDe(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}.${m}.${y}`;
+}
+function addDaysToIso(iso: string, days: number): string {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 // Auto-complete partial dates: "25.4" → "25.04.2026", "1.1.25" → "01.01.2025"
 function normalizeDate(val: string): string {
@@ -109,11 +128,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
-  const [contactHighlight, setContactHighlight] = useState(-1);
   const [itemSuggestions, setItemSuggestions] = useState<{ items: CatalogItem[]; rowIdx: number } | null>(null);
   const [itemHighlight, setItemHighlight] = useState(-1);
-  const contactRef = useRef<HTMLDivElement>(null);
   const itemSugRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,9 +139,6 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (contactRef.current && !contactRef.current.contains(e.target as Node)) {
-        setContactSuggestions([]);
-      }
       if (itemSugRef.current && !itemSugRef.current.contains(e.target as Node)) {
         setItemSuggestions(null);
       }
@@ -136,15 +149,9 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   function handleCustomerNameChange(v: string) {
     setCustomerName(v);
-    setContactHighlight(-1);
-    if (v.length < 1) { setContactSuggestions([]); return; }
-    const matches = contacts.filter((c) =>
-      c.name.toLowerCase().includes(v.toLowerCase())
-    ).slice(0, 6);
-    setContactSuggestions(matches);
   }
 
-  function selectContact(c: Contact) {
+  function selectContact(c: ContactSuggestion) {
     setCustomerName(c.name);
     const p = parseAddress(c.address || "");
     setAddrStreet(p.street);
@@ -152,10 +159,12 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     setAddrCity(p.city);
     setAddrCountry(p.country);
     setCustEmail(c.email || "");
-    setCustTradeReg(c.trade_register || "");
-    setCustTaxNum(c.tax_number || "");
-    setCustVatNum(c.vat_number || "");
-    setContactSuggestions([]);
+    const full = contacts.find(x => x.id === c.id);
+    if (full) {
+      setCustTradeReg(full.trade_register || "");
+      setCustTaxNum(full.tax_number || "");
+      setCustVatNum(full.vat_number || "");
+    }
   }
 
   function handleDescChange(idx: number, v: string) {
@@ -556,13 +565,12 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1.5">Date</label>
-            <input
-              type="text"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              onBlur={(e) => setDate(normalizeDate(e.target.value))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-              placeholder="DD.MM.YYYY"
+            <DatePicker
+              value={deToIso(date)}
+              onChange={(iso) => {
+                setDate(isoToDe(iso));
+                setDueDate(isoToDe(addDaysToIso(iso, 7)));
+              }}
             />
           </div>
           <div>
@@ -587,13 +595,9 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                 ✓ Already paid
               </div>
             ) : (
-              <input
-                type="text"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                onBlur={(e) => setDueDate(normalizeDate(e.target.value))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                placeholder="DD.MM.YYYY"
+              <DatePicker
+                value={deToIso(dueDate)}
+                onChange={(iso) => setDueDate(isoToDe(iso))}
               />
             )}
           </div>
@@ -604,130 +608,29 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
           <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 pb-2 mb-4">
             Customer
           </p>
-          <div className="space-y-3">
-            {/* Name with autocomplete */}
-            <div ref={contactRef} className="relative">
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Name *</label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => handleCustomerNameChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (!contactSuggestions.length) return;
-                  if (e.key === "ArrowDown") { e.preventDefault(); setContactHighlight(h => Math.min(h + 1, contactSuggestions.length - 1)); }
-                  else if (e.key === "ArrowUp") { e.preventDefault(); setContactHighlight(h => Math.max(h - 1, 0)); }
-                  else if (e.key === "Enter" && contactHighlight >= 0) { e.preventDefault(); selectContact(contactSuggestions[contactHighlight]); setContactHighlight(-1); }
-                  else if (e.key === "Escape") { setContactSuggestions([]); setContactHighlight(-1); }
-                }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                placeholder="Company or person name"
-                required
-              />
-              {contactSuggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
-                  {contactSuggestions.map((c, i) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onMouseDown={() => selectContact(c)}
-                      onMouseEnter={() => setContactHighlight(i)}
-                      className={`w-full text-left px-4 py-2.5 text-sm border-b border-gray-100 last:border-0 ${i === contactHighlight ? "bg-indigo-50" : "hover:bg-gray-50"}`}
-                    >
-                      <span className="font-semibold">{c.name}</span>
-                      {c.address && <span className="text-gray-400 text-xs block truncate">{c.address}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {/* Address fields */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Street & number</label>
-              <input
-                type="text"
-                value={addrStreet}
-                onChange={(e) => setAddrStreet(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                placeholder="Musterstraße 1"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">ZIP code</label>
-                <input
-                  type="text"
-                  value={addrZip}
-                  onChange={(e) => setAddrZip(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="10115"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">City</label>
-                <input
-                  type="text"
-                  value={addrCity}
-                  onChange={(e) => setAddrCity(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="Berlin"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Country</label>
-                <input
-                  type="text"
-                  value={addrCountry}
-                  onChange={(e) => setAddrCountry(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="Germany"
-                />
-              </div>
-            </div>
-            {/* Email for sending */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Email <span className="font-normal text-gray-400">(for sending invoice)</span></label>
-              <input
-                type="email"
-                value={custEmail}
-                onChange={(e) => setCustEmail(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                placeholder="recipient@example.com"
-              />
-            </div>
-            {/* Optional legal details */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Handelsregister <span className="font-normal text-gray-400">(optional)</span></label>
-                <input
-                  type="text"
-                  value={custTradeReg}
-                  onChange={(e) => setCustTradeReg(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="HRB 12345"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">St.-Nr. <span className="font-normal text-gray-400">(optional)</span></label>
-                <input
-                  type="text"
-                  value={custTaxNum}
-                  onChange={(e) => setCustTaxNum(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="37/250/12345"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">USt-IdNr. <span className="font-normal text-gray-400">(optional)</span></label>
-                <input
-                  type="text"
-                  value={custVatNum}
-                  onChange={(e) => setCustVatNum(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
-                  placeholder="DE123456789"
-                />
-              </div>
-            </div>
-          </div>
+          <CustomerFields
+            name={customerName}
+            onNameChange={handleCustomerNameChange}
+            street={addrStreet}
+            onStreetChange={setAddrStreet}
+            zip={addrZip}
+            onZipChange={setAddrZip}
+            city={addrCity}
+            onCityChange={setAddrCity}
+            country={addrCountry}
+            onCountryChange={setAddrCountry}
+            email={custEmail}
+            onEmailChange={setCustEmail}
+            emailLabel="Email (for sending invoice)"
+            tradeReg={custTradeReg}
+            onTradeRegChange={setCustTradeReg}
+            taxNum={custTaxNum}
+            onTaxNumChange={setCustTaxNum}
+            vatNum={custVatNum}
+            onVatNumChange={setCustVatNum}
+            contacts={contacts as ContactSuggestion[]}
+            onContactSelect={selectContact}
+          />
         </div>
 
         {/* Items */}

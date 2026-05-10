@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formatEuro } from "@/lib/format";
+import ConfirmModal from "@/components/ConfirmModal";
 
 interface Invoice {
   id: string;
@@ -68,11 +69,13 @@ export default function InvoicesClient({ restaurantId }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this invoice?")) return;
     await supabase.from("invoices").delete().eq("id", id).eq("restaurant_id", restaurantId);
     setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+    setDeleteConfirm(null);
   }
 
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
 
   async function handleDownload(inv: Invoice) {
@@ -112,7 +115,7 @@ export default function InvoicesClient({ restaurantId }: Props) {
 
       if (!res.ok) {
         const err = await res.json();
-        alert("Error generating PDF: " + err.error);
+        setPdfError("Error generating PDF: " + err.error);
         return;
       }
 
@@ -333,7 +336,7 @@ export default function InvoicesClient({ restaurantId }: Props) {
                         Edit
                       </Link>
                       <button
-                        onClick={() => handleDelete(inv.id)}
+                        onClick={() => setDeleteConfirm(inv.id)}
                         className="text-xs text-red-400 hover:text-red-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
                       >
                         Delete
@@ -345,6 +348,27 @@ export default function InvoicesClient({ restaurantId }: Props) {
             </tbody>
           </table>
         </div>
+      )}
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Delete invoice?"
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(deleteConfirm)}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+
+      {pdfError && (
+        <ConfirmModal
+          title="PDF Error"
+          message={pdfError}
+          confirmLabel="OK"
+          onConfirm={() => setPdfError("")}
+          onCancel={() => setPdfError("")
+          }
+        />
       )}
     </div>
   );

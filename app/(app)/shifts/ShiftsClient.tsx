@@ -26,6 +26,7 @@ interface Props {
   canViewAll: boolean;
   canApprove: boolean;
   canEdit: boolean;
+  isCurrentUserDeactivated: boolean;
   departments: Department[];
   teamMembers: TeamMember[];
   profilesMap: Record<string, string>;
@@ -39,6 +40,7 @@ function formatTime(iso: string | null) {
 
 export default function ShiftsClient({
   currentUserId, restaurantId, canViewAll, canApprove, canEdit,
+  isCurrentUserDeactivated,
   departments, teamMembers, profilesMap, profileDeptMap,
 }: Props) {
   const supabase = createClient();
@@ -63,7 +65,7 @@ export default function ShiftsClient({
   const [deptFilter,          setDeptFilter]          = useState<string[]>([]);
   const [memberFilter,        setMemberFilter]        = useState<string[]>(canViewAll ? [] : [currentUserId]);
   const [statusFilter,        setStatusFilter]        = useState("");
-  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<EmployeeStatus[]>(["active"]);
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<EmployeeStatus[]>(["active", "imported"]);
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -141,6 +143,7 @@ export default function ShiftsClient({
   useEffect(() => { loadRecords(); loadActiveShift(); }, [loadRecords, loadActiveShift]);
 
   async function handleClock() {
+    if (isCurrentUserDeactivated) return;
     setClocking(true);
     if (activeShift) {
       await supabase.from("time_records")
@@ -213,12 +216,14 @@ export default function ShiftsClient({
             </button>
           )}
           {canEdit && <ImportButton onImported={loadRecords} />}
-          <button onClick={handleClock} disabled={clocking}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 whitespace-nowrap ${
-              activeShift ? "bg-red-500 hover:bg-red-600 text-white" : "bg-gray-900 hover:bg-gray-700 text-white"
-            }`}>
-            {clocking ? "…" : activeShift ? "⏹ Clock out" : "▶ Clock in"}
-          </button>
+          {!isCurrentUserDeactivated && (
+            <button onClick={handleClock} disabled={clocking}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 whitespace-nowrap ${
+                activeShift ? "bg-red-500 hover:bg-red-600 text-white" : "bg-gray-900 hover:bg-gray-700 text-white"
+              }`}>
+              {clocking ? "…" : activeShift ? "⏹ Clock out" : "▶ Clock in"}
+            </button>
+          )}
         </div>
       </div>
 

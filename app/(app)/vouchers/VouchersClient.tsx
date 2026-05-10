@@ -118,6 +118,13 @@ export default function VouchersClient({ restaurantId }: Props) {
     .reduce((s, v) => s + v.amount, 0);
   const totalRedeemed = vouchers.filter((v) => v.status === "redeemed").length;
 
+  const [statusConfirm, setStatusConfirm] = useState<{
+    id: string;
+    code: string;
+    from: Voucher["status"];
+    to: Voucher["status"];
+  } | null>(null);
+
   const [deleteConfirm, setDeleteConfirm] = useState<{
     id: string;
     code: string;
@@ -144,6 +151,16 @@ export default function VouchersClient({ restaurantId }: Props) {
   // Create voucher modal
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [sendToRecipient, setSendToRecipient] = useState(false);
+  const [needsInvoice, setNeedsInvoice] = useState(false);
+
+  function defaultValidUntil() {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 2);
+    return d.toISOString().slice(0, 10);
+  }
+
   const [createForm, setCreateForm] = useState({
     voucher_code: generateCode(),
     amount: "",
@@ -152,50 +169,65 @@ export default function VouchersClient({ restaurantId }: Props) {
     recipient_name: "",
     recipient_email: "",
     personal_message: "",
-    valid_until: "",
+    valid_until: defaultValidUntil(),
     notes: "",
+    invoice_company: "",
+    invoice_address: "",
+    invoice_vat: "",
+    invoice_tax: "",
   });
 
   function setField(k: string, v: string) {
     setCreateForm((f) => ({ ...f, [k]: v }));
   }
 
+  function openCreate() {
+    setCreateForm({
+      voucher_code: generateCode(),
+      amount: "",
+      buyer_name: "",
+      buyer_email: "",
+      recipient_name: "",
+      recipient_email: "",
+      personal_message: "",
+      valid_until: defaultValidUntil(),
+      notes: "",
+      invoice_company: "",
+      invoice_address: "",
+      invoice_vat: "",
+      invoice_tax: "",
+    });
+    setSendToRecipient(false);
+    setNeedsInvoice(false);
+    setCreateError("");
+    setShowCreate(true);
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!createForm.amount || isNaN(parseFloat(createForm.amount))) return;
     setCreating(true);
-    const { data, error } = await supabase
-      .from("vouchers")
-      .insert({
-        voucher_code: createForm.voucher_code.toUpperCase().trim(),
-        amount: parseFloat(createForm.amount),
-        buyer_name: createForm.buyer_name || null,
-        buyer_email: createForm.buyer_email || null,
-        recipient_name: createForm.recipient_name || null,
-        recipient_email: createForm.recipient_email || null,
-        personal_message: createForm.personal_message || null,
-        valid_until: createForm.valid_until || null,
-        notes: createForm.notes || null,
-        status: "active",
-        restaurant_id: restaurantId,
-      })
-      .select()
-      .single();
-    if (!error && data) {
-      setVouchers((prev) => [data as Voucher, ...prev]);
-      setShowCreate(false);
-      setCreateForm({
-        voucher_code: generateCode(),
-        amount: "",
-        buyer_name: "",
-        buyer_email: "",
-        recipient_name: "",
-        recipient_email: "",
-        personal_message: "",
-        valid_until: "",
-        notes: "",
-      });
+    setCreateError("");
+
+    const res = await fetch("/api/send-voucher", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...createForm,
+        send_to_recipient: sendToRecipient,
+        needs_invoice: needsInvoice,
+      }),
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      setCreateError(result.error || "Failed to create voucher.");
+      setCreating(false);
+      return;
     }
+
+    await load();
+    setShowCreate(false);
     setCreating(false);
   }
 
@@ -244,10 +276,7 @@ export default function VouchersClient({ restaurantId }: Props) {
             Redeemed: {totalRedeemed}
           </div>
           <button
-            onClick={() => {
-              setCreateForm((f) => ({ ...f, voucher_code: generateCode() }));
-              setShowCreate(true);
-            }}
+            onClick={openCreate}
             className="bg-gray-900 text-white px-4 py-2 rounded-xl font-semibold hover:bg-gray-700 transition-colors"
           >
             + New voucher
@@ -349,9 +378,11 @@ export default function VouchersClient({ restaurantId }: Props) {
                       <select
                         value={v.status}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          updateStatus(v.id, e.target.value as Voucher["status"])
-                        }
+                        onChange={(e) => {
+                          const newStatus = e.target.value as Voucher["status"];
+                          if (newStatus === v.status) return;
+                          setStatusConfirm({ id: v.id, code: v.voucher_code, from: v.status, to: newStatus });
+                        }}
                         className={`text-xs font-semibold px-2.5 py-1 rounded-full border-0 outline-none cursor-pointer ${
                           STATUS_COLORS[v.status]
                         }`}
@@ -504,157 +535,185 @@ export default function VouchersClient({ restaurantId }: Props) {
         </div>
       )}
 
+      {/* Status change confirmation */}
+      {statusConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="text-base font-bold text-gray-900 mb-2">Change voucher status?</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              <span className="font-mono font-semibold text-gray-700">{statusConfirm.code}</span>
+            </p>
+            <p className="text-sm text-gray-500 mb-5">
+              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold mr-1 ${STATUS_COLORS[statusConfirm.from]}`}>{STATUS_LABELS[statusConfirm.from]}</span>
+              →
+              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ml-1 ${STATUS_COLORS[statusConfirm.to]}`}>{STATUS_LABELS[statusConfirm.to]}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  await updateStatus(statusConfirm.id, statusConfirm.to);
+                  setStatusConfirm(null);
+                }}
+                className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-700 transition-colors"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setStatusConfirm(null)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:border-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create voucher modal */}
       {showCreate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => setShowCreate(false)}
         >
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={handleCreate}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-lg font-bold mb-5">New voucher</h2>
 
             <div className="space-y-3">
+              {/* Code */}
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <label className="text-xs font-semibold text-gray-400 uppercase">
-                    Code
-                  </label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Code</label>
                   <input
                     value={createForm.voucher_code}
                     onChange={(e) => setField("voucher_code", e.target.value)}
                     className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-mono outline-none focus:border-gray-800"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setField("voucher_code", generateCode())}
-                  className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-xl hover:border-gray-800 transition-colors mb-0.5"
-                >
-                  ↺
-                </button>
+                <button type="button" onClick={() => setField("voucher_code", generateCode())}
+                  className="px-3 py-2 text-xs font-semibold text-gray-500 border border-gray-200 rounded-xl hover:border-gray-800 transition-colors mb-0.5">↺</button>
               </div>
 
+              {/* Amount */}
               <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase">
-                  Amount (€) *
-                </label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  required
-                  value={createForm.amount}
-                  onChange={(e) => setField("amount", e.target.value)}
+                <label className="text-xs font-semibold text-gray-400 uppercase">Amount (€) *</label>
+                <input type="number" min="0.01" step="0.01" required
+                  value={createForm.amount} onChange={(e) => setField("amount", e.target.value)}
                   placeholder="0.00"
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                />
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
               </div>
 
+              {/* Buyer */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase">
-                    Buyer name
-                  </label>
-                  <input
-                    value={createForm.buyer_name}
-                    onChange={(e) => setField("buyer_name", e.target.value)}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                  />
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Buyer name</label>
+                  <input value={createForm.buyer_name} onChange={(e) => setField("buyer_name", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase">
-                    Buyer email
-                  </label>
-                  <input
-                    type="email"
-                    value={createForm.buyer_email}
-                    onChange={(e) => setField("buyer_email", e.target.value)}
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase">
-                    Recipient name
-                  </label>
-                  <input
-                    value={createForm.recipient_name}
-                    onChange={(e) =>
-                      setField("recipient_name", e.target.value)
-                    }
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-400 uppercase">
-                    Recipient email
-                  </label>
-                  <input
-                    type="email"
-                    value={createForm.recipient_email}
-                    onChange={(e) =>
-                      setField("recipient_email", e.target.value)
-                    }
-                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                  />
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Buyer email</label>
+                  <input type="email" value={createForm.buyer_email} onChange={(e) => setField("buyer_email", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
                 </div>
               </div>
 
+              {/* Recipient name (always visible) */}
               <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase">
-                  Valid until
-                </label>
-                <input
-                  type="date"
-                  value={createForm.valid_until}
-                  onChange={(e) => setField("valid_until", e.target.value)}
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                />
+                <label className="text-xs font-semibold text-gray-400 uppercase">Recipient name</label>
+                <input value={createForm.recipient_name} onChange={(e) => setField("recipient_name", e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
               </div>
 
+              {/* Send to recipient toggle */}
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input type="checkbox" checked={sendToRecipient} onChange={(e) => setSendToRecipient(e.target.checked)}
+                  className="w-4 h-4 rounded accent-gray-900" />
+                <span className="text-sm font-medium text-gray-700">Send voucher PDF to recipient by email</span>
+              </label>
+
+              {sendToRecipient && (
+                <div>
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Recipient email *</label>
+                  <input type="email" required={sendToRecipient}
+                    value={createForm.recipient_email} onChange={(e) => setField("recipient_email", e.target.value)}
+                    className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+                </div>
+              )}
+
+              {/* Valid until — pre-filled 2 years */}
               <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase">
-                  Personal message
-                </label>
-                <textarea
-                  value={createForm.personal_message}
-                  onChange={(e) =>
-                    setField("personal_message", e.target.value)
-                  }
-                  rows={2}
-                  placeholder="Optional gift message…"
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 resize-none"
-                />
+                <label className="text-xs font-semibold text-gray-400 uppercase">Valid until</label>
+                <input type="date" value={createForm.valid_until} onChange={(e) => setField("valid_until", e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
               </div>
 
+              {/* Personal message */}
               <div>
-                <label className="text-xs font-semibold text-gray-400 uppercase">
-                  Notes
+                <label className="text-xs font-semibold text-gray-400 uppercase">Personal message</label>
+                <textarea value={createForm.personal_message} onChange={(e) => setField("personal_message", e.target.value)}
+                  rows={2} placeholder="Optional gift message…"
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 resize-none" />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Notes</label>
+                <input value={createForm.notes} onChange={(e) => setField("notes", e.target.value)}
+                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800" />
+              </div>
+
+              {/* Invoice section */}
+              <div className="border-t border-gray-100 pt-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input type="checkbox" checked={needsInvoice} onChange={(e) => setNeedsInvoice(e.target.checked)}
+                    className="w-4 h-4 rounded accent-gray-900" />
+                  <span className="text-sm font-medium text-gray-700">I need an invoice</span>
                 </label>
-                <input
-                  value={createForm.notes}
-                  onChange={(e) => setField("notes", e.target.value)}
-                  className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800"
-                />
+
+                {needsInvoice && (
+                  <div className="mt-3 space-y-2.5 bg-gray-50 rounded-xl p-3">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-400 uppercase">Company / Name</label>
+                      <input value={createForm.invoice_company} onChange={(e) => setField("invoice_company", e.target.value)}
+                        className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-gray-400 uppercase">Address</label>
+                      <input value={createForm.invoice_address} onChange={(e) => setField("invoice_address", e.target.value)}
+                        className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 bg-white" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase">VAT No.</label>
+                        <input value={createForm.invoice_vat} onChange={(e) => setField("invoice_vat", e.target.value)}
+                          className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 bg-white" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 uppercase">Tax No.</label>
+                        <input value={createForm.invoice_tax} onChange={(e) => setField("invoice_tax", e.target.value)}
+                          className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-gray-800 bg-white" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400">Invoice details will be included in the buyer confirmation email.</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-2 mt-6">
-              <button
-                type="submit"
-                disabled={creating}
-                className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-700 disabled:opacity-50 transition-colors"
-              >
+            {createError && (
+              <p className="mt-3 text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2">{createError}</p>
+            )}
+
+            <div className="flex gap-2 mt-5">
+              <button type="submit" disabled={creating}
+                className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-gray-700 disabled:opacity-50 transition-colors">
                 {creating ? "Creating…" : "Create voucher"}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:border-gray-800 transition-colors"
-              >
+              <button type="button" onClick={() => setShowCreate(false)}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:border-gray-800 transition-colors">
                 Cancel
               </button>
             </div>

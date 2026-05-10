@@ -90,7 +90,7 @@ export default function TeamTableClient({
   serverToday: string;
 }) {
   const [nameFilter,   setNameFilter]   = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<Status[]>(["active"]);
+  const [statusFilter, setStatusFilter] = useState<Status[]>(["active", "imported"]);
   const [deptFilter,   setDeptFilter]   = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");

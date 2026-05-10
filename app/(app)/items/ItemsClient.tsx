@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatEuro } from "@/lib/format";
 import type { CatalogItem } from "@/lib/types";
+import ConfirmModal from "@/components/ConfirmModal";
 
 const EMPTY_ITEM = { name: "", description: "", price: "", vat_rate: "7" };
 
@@ -19,6 +20,7 @@ export default function ItemsClient({ restaurantId }: Props) {
   const [modal, setModal] = useState<CatalogItem | null>(null);
   const [form, setForm] = useState(EMPTY_ITEM);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   async function load() {
     const { data } = await supabase
@@ -75,13 +77,13 @@ export default function ItemsClient({ restaurantId }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this item?")) return;
     await supabase
       .from("catalog_items")
       .delete()
       .eq("id", id)
       .eq("restaurant_id", restaurantId);
     setItems((prev) => prev.filter((i) => i.id !== id));
+    setDeleteConfirm(null);
   }
 
   const filtered = items.filter(
@@ -159,7 +161,7 @@ export default function ItemsClient({ restaurantId }: Props) {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => setDeleteConfirm(item.id)}
                   className="text-xs text-red-400 hover:text-red-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
                 >
                   Delete
@@ -168,6 +170,17 @@ export default function ItemsClient({ restaurantId }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Delete item?"
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(deleteConfirm)}
+          onCancel={() => setDeleteConfirm(null)}
+        />
       )}
 
       {modal !== null && (

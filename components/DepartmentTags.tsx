@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 export interface Department { id: string; name: string; }
 
@@ -41,8 +42,10 @@ export default function DepartmentTags({
   const [creating, setCreating]     = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const ref     = useRef<HTMLDivElement>(null);
+  const ref      = useRef<HTMLDivElement>(null);
+  const btnRef   = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
   // Sync allDepts when parent updates its shared list (e.g. another instance created a dept)
   useEffect(() => { setAllDepts(initialAll); }, [initialAll]);
@@ -62,6 +65,26 @@ export default function DepartmentTags({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Position dropdown via portal when open — flip upward if near bottom of viewport
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const dropdownHeight = 260; // approximate max height
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openAbove = spaceBelow < dropdownHeight && rect.top > dropdownHeight;
+      setDropdownStyle({
+        position: "fixed",
+        ...(openAbove
+          ? { bottom: window.innerHeight - rect.top + 6 }
+          : { top: rect.bottom + 6 }),
+        left: rect.left,
+        minWidth: 192,
+        zIndex: 9999,
+      });
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [open]);
 
   async function toggle(dept: Department) {
     if (saving) return;
@@ -166,6 +189,7 @@ export default function DepartmentTags({
 
         {canEdit && (
           <button
+            ref={btnRef}
             onClick={() => setOpen(o => !o)}
             className={`inline-flex items-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:text-gray-600 hover:border-gray-400 transition-colors ${
               compact ? "px-1.5 py-0 text-[11px]" : "px-2 py-0.5 text-xs"
@@ -176,8 +200,8 @@ export default function DepartmentTags({
         )}
       </div>
 
-      {open && canEdit && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 bg-white border border-gray-200 rounded-xl shadow-xl p-1.5 min-w-48">
+      {open && canEdit && typeof window !== "undefined" && createPortal(
+        <div style={dropdownStyle} className="bg-white border border-gray-200 rounded-xl shadow-xl p-1.5">
           {/* Existing departments */}
           {allDepts.length === 0 && !canCreate && (
             <p className="text-xs text-gray-400 px-3 py-2">No departments set up yet.</p>
@@ -239,7 +263,8 @@ export default function DepartmentTags({
               </form>
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

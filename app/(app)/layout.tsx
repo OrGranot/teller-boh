@@ -21,6 +21,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!member) redirect("/setup");
 
+  const today = new Date().toISOString().slice(0, 10);
+  const isDeactivated = !!(member.contract_end && member.contract_end <= today);
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("name")
@@ -34,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     role: member.role,
     profileId: user.id,
     profileName: profile?.name ?? null,
+    isDeactivated,
   };
 
   return (

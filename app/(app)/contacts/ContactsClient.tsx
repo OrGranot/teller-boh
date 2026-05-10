@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Contact } from "@/lib/types";
+import ConfirmModal from "@/components/ConfirmModal";
 
 const EMPTY_CONTACT: Omit<Contact, "id" | "created_at"> = {
   name: "",
@@ -54,6 +55,7 @@ export default function ContactsClient({ restaurantId }: Props) {
   const [modal, setModal] = useState<Contact | null>(null);
   const [form, setForm] = useState(EMPTY_CONTACT);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [addrStreet, setAddrStreet] = useState("");
   const [addrZip, setAddrZip] = useState("");
   const [addrCity, setAddrCity] = useState("");
@@ -118,13 +120,13 @@ export default function ContactsClient({ restaurantId }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this contact?")) return;
     await supabase
       .from("contacts")
       .delete()
       .eq("id", id)
       .eq("restaurant_id", restaurantId);
     setContacts((prev) => prev.filter((c) => c.id !== id));
+    setDeleteConfirm(null);
   }
 
   const filtered = contacts.filter(
@@ -197,7 +199,7 @@ export default function ContactsClient({ restaurantId }: Props) {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(c.id)}
+                  onClick={() => setDeleteConfirm(c.id)}
                   className="text-xs text-red-400 hover:text-red-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
                 >
                   Delete
@@ -206,6 +208,17 @@ export default function ContactsClient({ restaurantId }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {deleteConfirm && (
+        <ConfirmModal
+          title="Delete contact?"
+          message="This action cannot be undone."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(deleteConfirm)}
+          onCancel={() => setDeleteConfirm(null)}
+        />
       )}
 
       {/* Modal */}

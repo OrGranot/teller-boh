@@ -27,11 +27,14 @@ export async function POST(req: NextRequest) {
   const restaurantId = member.restaurant_id;
 
   try {
-    const { items, date, customerAddress, tip } = (await req.json()) as {
+    const { items, date, customerName, customerAddress, tip, paymentMethod, pdfLanguage } = (await req.json()) as {
       items: BewItem[];
       date: string;
+      customerName?: string;
       customerAddress?: string;
       tip?: number;
+      paymentMethod?: string;
+      pdfLanguage?: "de" | "en";
     };
 
     if (!items?.length) {
@@ -58,8 +61,11 @@ export async function POST(req: NextRequest) {
       items,
       date,
       company,
+      customerName,
       customerAddress,
-      tip
+      tip,
+      paymentMethod,
+      pdfLanguage ?? "de"
     );
     const filename = `Bewirtungsbeleg_${date}.pdf`;
 

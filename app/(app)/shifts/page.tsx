@@ -8,16 +8,19 @@ export default async function ShiftsPage() {
 
   const { data: member } = await supabase
     .from("restaurant_members")
-    .select("restaurant_id, role:roles(is_owner, permissions)")
+    .select("restaurant_id, contract_end, role:roles(is_owner, permissions)")
     .eq("profile_id", user.id)
     .single();
 
   if (!member) return null;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const isCurrentUserDeactivated = !!(member.contract_end && (member.contract_end as string) <= today);
+
   const role = member.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> };
-  const canViewAll = role.is_owner || role.permissions?.can_view_all_shifts;
-  const canApprove = role.is_owner || role.permissions?.can_approve_shifts;
-  const canEdit = role.is_owner || role.permissions?.can_edit_shifts;
+  const canViewAll = !isCurrentUserDeactivated && (role.is_owner || role.permissions?.can_view_all_shifts);
+  const canApprove = !isCurrentUserDeactivated && (role.is_owner || role.permissions?.can_approve_shifts);
+  const canEdit = !isCurrentUserDeactivated && (role.is_owner || role.permissions?.can_edit_shifts);
 
   const { data: departments } = await supabase
     .from("departments")
@@ -31,8 +34,6 @@ export default async function ShiftsPage() {
         .select("profile_id, contract_end, profile:profiles(name, is_placeholder)")
         .eq("restaurant_id", member.restaurant_id)
     : { data: null };
-
-  const today = new Date().toISOString().slice(0, 10);
 
   // Build enriched team member list with employee status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,6 +78,7 @@ export default async function ShiftsPage() {
       canViewAll={!!canViewAll}
       canApprove={!!canApprove}
       canEdit={!!canEdit}
+      isCurrentUserDeactivated={isCurrentUserDeactivated}
       departments={departments || []}
       teamMembers={teamMembers}
       profilesMap={profilesMap}

@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
       customerName,
       customerAddress,
       tip,
+      paymentMethod,
+      pdfLanguage,
     } = (await req.json()) as {
       items: BewItem[];
       date: string;
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
       customerName?: string;
       customerAddress?: string;
       tip?: number;
+      paymentMethod?: string;
+      pdfLanguage?: "de" | "en";
     };
 
     if (!customerEmail)
@@ -76,8 +80,11 @@ export async function POST(req: NextRequest) {
       items,
       date,
       company,
+      customerName,
       customerAddress,
-      tip
+      tip,
+      paymentMethod,
+      pdfLanguage ?? "de"
     );
 
     const dateDisplay = date.split("-").reverse().join(".");

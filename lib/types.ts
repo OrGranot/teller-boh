@@ -111,6 +111,7 @@ export interface AppContext {
   role: Role;
   profileId: string;
   profileName: string | null;
+  isDeactivated: boolean;
 }
 
 // ─── Finance types (from TellerBOH) ─────────────────────────────────────────

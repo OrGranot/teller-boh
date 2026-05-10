@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,7 +19,11 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
-    const { data: member } = await supabase.from("restaurant_members").select("restaurant_id").limit(1).single();
+    const { data: member } = await supabase
+      .from("restaurant_members")
+      .select("restaurant_id")
+      .limit(1)
+      .single();
     router.push(member ? "/shifts" : "/setup");
   }
 
@@ -54,5 +59,13 @@ export default function LoginPage() {
         <Link href="/register" className="text-gray-900 font-semibold hover:underline">Create an account</Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
