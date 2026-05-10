@@ -83,15 +83,20 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [items, setItems] = useState<InvoiceItem[]>(
     initial?.items?.length ? initial.items : [EMPTY_ITEM()]
   );
-  console.log("[InvoiceForm init] tip_percent:", initial?.tip_percent, "tip_amount:", initial?.tip_amount);
-  const [tipEnabled, setTipEnabled] = useState(
-    parseNum(initial?.tip_percent || "0") > 0 || parseNum(initial?.tip_amount || "0") > 0
+  const _initTipPct = parseNum(initial?.tip_percent || "0");
+  const _initTipAmt = parseNum(initial?.tip_amount || "0");
+  // Mode: if tip_percent is a whole number (user typed it) → % mode.
+  // If it's a decimal (computed from a fixed € amount) → € mode.
+  const _initMode: "percent" | "amount" =
+    _initTipPct > 0 && _initTipPct !== Math.round(_initTipPct) ? "amount" : "percent";
+  const [tipEnabled, setTipEnabled] = useState(_initTipPct > 0 || _initTipAmt > 0);
+  const [tipMode, setTipMode] = useState<"percent" | "amount">(_initMode);
+  const [tipPercent, setTipPercent] = useState(
+    _initMode === "percent" && _initTipPct > 0 ? String(_initTipPct) : "10"
   );
-  const [tipMode, setTipMode] = useState<"percent" | "amount">(
-    parseNum(initial?.tip_amount || "0") > 0 ? "amount" : "percent"
+  const [tipFixed, setTipFixed] = useState(
+    _initTipAmt > 0 ? String(_initTipAmt) : ""
   );
-  const [tipPercent, setTipPercent] = useState(initial?.tip_percent || "10");
-  const [tipFixed, setTipFixed] = useState(initial?.tip_amount || "");
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -411,64 +416,60 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
     const invoice = { ...buildInvoice(), invoice_number: num };
     const supabase2 = createClient();
-    const tipPctVal = parseNum(invoice.tip_percent || "0");
-    const tipAmtVal = tipEnabled && tipMode === "amount" ? parseNum(tipFixed) : 0;
     const subtotalVal = activeItems.reduce((acc, item) => acc + calcRowSum(item), 0);
-    const totalVal = subtotalVal + (tipAmtVal > 0 ? tipAmtVal : tipPctVal > 0 ? subtotalVal * tipPctVal / 100 : 0);
+
+    // Always derive BOTH tip_percent and tip_amount so either can restore the form.
+    // % mode: user entered %, derive € amount. € mode: user entered €, derive %.
+    let tipPctVal: number;
+    let tipAmtVal: number;
+    if (tipEnabled) {
+      if (tipMode === "amount") {
+        tipAmtVal = parseNum(tipFixed);
+        tipPctVal = subtotalVal > 0 ? Math.round(tipAmtVal / subtotalVal * 10000) / 100 : 0;
+      } else {
+        tipPctVal = parseNum(tipPercent);
+        tipAmtVal = Math.round(subtotalVal * tipPctVal / 100 * 100) / 100;
+      }
+    } else {
+      tipPctVal = 0;
+      tipAmtVal = 0;
+    }
+    const totalVal = subtotalVal + tipAmtVal;
+
+    const invoiceRow = {
+      date: invoice.date,
+      due_date: invoice.due_date,
+      customer_name: invoice.customer_name,
+      customer_address: invoice.customer_address,
+      customer_trade_register: invoice.customer_trade_register || null,
+      customer_tax_number: invoice.customer_tax_number || null,
+      customer_vat_number: invoice.customer_vat_number || null,
+      tip_percent: tipPctVal,
+      tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
+      lang: invoice.lang,
+      total: totalVal,
+      notes: notes.trim() || null,
+    };
 
     let id = savedId;
     if (id) {
-      // Step 1: always update core fields
       const { error: upErr } = await supabase2.from("invoices").update({
-        date: invoice.date,
-        due_date: invoice.due_date,
-        customer_name: invoice.customer_name,
-        customer_address: invoice.customer_address,
-        customer_trade_register: invoice.customer_trade_register || null,
-        customer_tax_number: invoice.customer_tax_number || null,
-        customer_vat_number: invoice.customer_vat_number || null,
-        tip_percent: tipPctVal,
-        lang: invoice.lang,
-        total: totalVal,
-        notes: notes.trim() || null,
+        ...invoiceRow,
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
         updated_at: new Date().toISOString(),
       }).eq("id", id);
       if (upErr) { alert("Save failed: " + upErr.message); setSavingDraft(false); return; }
-
-      // Step 2: save tip_amount separately (runs after migration adds column)
-      await supabase2.from("invoices")
-        .update({ tip_amount: tipAmtVal > 0 ? tipAmtVal : null })
-        .eq("id", id);
-
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
     } else {
-      // New invoice — insert core fields first
       const { data, error } = await supabase2.from("invoices").insert({
         restaurant_id: restaurantId,
         invoice_number: num,
-        date: invoice.date,
-        due_date: invoice.due_date,
-        customer_name: invoice.customer_name,
-        customer_address: invoice.customer_address,
-        customer_trade_register: invoice.customer_trade_register || null,
-        customer_tax_number: invoice.customer_tax_number || null,
-        customer_vat_number: invoice.customer_vat_number || null,
-        tip_percent: tipPctVal,
-        lang: invoice.lang,
-        total: totalVal,
-        notes: notes.trim() || null,
+        ...invoiceRow,
         status: isPaid ? "paid" : "draft",
       }).select("id").single();
       if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
       id = data?.id;
-      if (id) {
-        setSavedId(id);
-        // Save tip_amount separately
-        await supabase2.from("invoices")
-          .update({ tip_amount: tipAmtVal > 0 ? tipAmtVal : null })
-          .eq("id", id);
-      }
+      if (id) setSavedId(id);
     }
 
     if (id) {

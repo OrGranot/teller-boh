@@ -97,7 +97,6 @@ export default async function EditInvoicePage({
     return acc + (s > 0 ? s : Number(item.qty) * Number(item.price) * (1 + Number(item.vat_rate) / 100));
   }, 0);
   const storedTotal = Number(inv.total ?? 0);
-  console.log("[invoice load]", { tip_percent: inv.tip_percent, tip_amount: inv.tip_amount, total: inv.total, tipAmountFromDb, computedSubtotal, storedTotal });
   // If no explicit tip_amount and no tip_percent, but stored total > subtotal,
   // infer the fixed tip from the difference (handles invoices saved before migration).
   const inferredFixedTip =
