@@ -415,57 +415,59 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     const subtotalVal = activeItems.reduce((acc, item) => acc + calcRowSum(item), 0);
     const totalVal = subtotalVal + (tipAmtVal > 0 ? tipAmtVal : tipPctVal > 0 ? subtotalVal * tipPctVal / 100 : 0);
 
-    // Helper: build the core invoice payload (fields that always exist in DB)
-    const corePayload = {
-      date: invoice.date,
-      due_date: invoice.due_date,
-      customer_name: invoice.customer_name,
-      customer_address: invoice.customer_address,
-      customer_trade_register: invoice.customer_trade_register || null,
-      customer_tax_number: invoice.customer_tax_number || null,
-      customer_vat_number: invoice.customer_vat_number || null,
-      tip_percent: tipPctVal,
-      lang: invoice.lang,
-      total: totalVal,
-      notes: notes.trim() || null,
-    };
-
     let id = savedId;
     if (id) {
-      // Try with tip_amount first; if column doesn't exist yet (migration pending),
-      // fall back to core payload so nothing is silently lost.
+      // Step 1: always update core fields
       const { error: upErr } = await supabase2.from("invoices").update({
-        ...corePayload,
-        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
+        date: invoice.date,
+        due_date: invoice.due_date,
+        customer_name: invoice.customer_name,
+        customer_address: invoice.customer_address,
+        customer_trade_register: invoice.customer_trade_register || null,
+        customer_tax_number: invoice.customer_tax_number || null,
+        customer_vat_number: invoice.customer_vat_number || null,
+        tip_percent: tipPctVal,
+        lang: invoice.lang,
+        total: totalVal,
+        notes: notes.trim() || null,
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
         updated_at: new Date().toISOString(),
       }).eq("id", id);
-      if (upErr) {
-        await supabase2.from("invoices").update({
-          ...corePayload,
-          status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
-          updated_at: new Date().toISOString(),
-        }).eq("id", id);
-      }
+      if (upErr) { alert("Save failed: " + upErr.message); setSavingDraft(false); return; }
+
+      // Step 2: save tip_amount separately (runs after migration adds column)
+      await supabase2.from("invoices")
+        .update({ tip_amount: tipAmtVal > 0 ? tipAmtVal : null })
+        .eq("id", id);
+
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
     } else {
-      // Try insert with tip_amount; fall back without if column missing.
-      const baseInsert = {
+      // New invoice — insert core fields first
+      const { data, error } = await supabase2.from("invoices").insert({
         restaurant_id: restaurantId,
         invoice_number: num,
-        ...corePayload,
+        date: invoice.date,
+        due_date: invoice.due_date,
+        customer_name: invoice.customer_name,
+        customer_address: invoice.customer_address,
+        customer_trade_register: invoice.customer_trade_register || null,
+        customer_tax_number: invoice.customer_tax_number || null,
+        customer_vat_number: invoice.customer_vat_number || null,
+        tip_percent: tipPctVal,
+        lang: invoice.lang,
+        total: totalVal,
+        notes: notes.trim() || null,
         status: isPaid ? "paid" : "draft",
-      };
-      let { data, error } = await supabase2.from("invoices").insert({
-        ...baseInsert,
-        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
       }).select("id").single();
-      if (error) {
-        ({ data, error } = await supabase2.from("invoices").insert(baseInsert).select("id").single());
-      }
       if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
       id = data?.id;
-      if (id) setSavedId(id);
+      if (id) {
+        setSavedId(id);
+        // Save tip_amount separately
+        await supabase2.from("invoices")
+          .update({ tip_amount: tipAmtVal > 0 ? tipAmtVal : null })
+          .eq("id", id);
+      }
     }
 
     if (id) {

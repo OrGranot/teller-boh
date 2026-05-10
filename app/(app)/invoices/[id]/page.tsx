@@ -89,18 +89,25 @@ export default async function EditInvoicePage({
   // exist yet (migration pending), infer a fixed tip from the difference
   // between the stored total and the computed subtotal.
   const tipPercent = Number(inv.tip_percent ?? 0);
-  const tipAmountFromDb = inv.tip_amount != null ? Number(inv.tip_amount) : null;
+  // tip_amount = 0 and tip_amount = null both mean "not set as fixed amount"
+  const tipAmountFromDb = (inv.tip_amount != null && Number(inv.tip_amount) > 0)
+    ? Number(inv.tip_amount)
+    : null;
   const computedSubtotal = items.reduce((acc, item) => {
     const s = Number(item.sum);
     return acc + (s > 0 ? s : Number(item.qty) * Number(item.price) * (1 + Number(item.vat_rate) / 100));
   }, 0);
   const storedTotal = Number(inv.total ?? 0);
+  // If no explicit tip_amount and no tip_percent, but stored total > subtotal,
+  // infer the fixed tip from the difference (handles invoices saved before migration).
   const inferredFixedTip =
-    tipAmountFromDb == null && tipPercent === 0 && storedTotal > computedSubtotal + 0.005
+    tipAmountFromDb == null && tipPercent === 0 && storedTotal > computedSubtotal + 0.01
       ? Math.round((storedTotal - computedSubtotal) * 100) / 100
       : null;
-  const resolvedTipAmount = tipAmountFromDb != null ? String(tipAmountFromDb)
-    : inferredFixedTip != null ? String(inferredFixedTip)
+  const resolvedTipAmount = tipAmountFromDb != null
+    ? String(tipAmountFromDb)
+    : inferredFixedTip != null
+    ? String(inferredFixedTip)
     : undefined;
 
   const invoice: Invoice = {
