@@ -177,6 +177,7 @@ export interface Invoice {
   customer_tax_number?: string;
   customer_vat_number?: string;
   tip_percent: string;
+  tip_amount?: string;
   lang: "de" | "en";
   status?: "draft" | "sent" | "paid";
   total?: number;

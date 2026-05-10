@@ -97,6 +97,7 @@ export default async function EditInvoicePage({
     customer_tax_number: inv.customer_tax_number || "",
     customer_vat_number: inv.customer_vat_number || "",
     tip_percent: String(inv.tip_percent ?? "0"),
+    tip_amount: inv.tip_amount != null ? String(inv.tip_amount) : undefined,
     lang: (inv.lang || "de") as "de" | "en",
     status: inv.status,
     notes: inv.notes || "",

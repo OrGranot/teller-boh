@@ -119,11 +119,13 @@ export default function InvoicePDF({ invoice, company, logoBase64 }: Props) {
     return { ...item, rowSum, vatAmt };
   });
 
-  const tipPct = parseNum(invoice.tip_percent || "0");
-  const tipAmount = tipPct > 0 ? Math.round(subtotal * tipPct) / 100 : 0;
+  const tipPct = parseNum(String(invoice.tip_percent || "0"));
+  const tipFixedAmt = parseNum(String(invoice.tip_amount || "0"));
+  const tipAmount = tipFixedAmt > 0 ? tipFixedAmt : tipPct > 0 ? Math.round(subtotal * tipPct) / 100 : 0;
+  const tipLabel = tipFixedAmt > 0 ? "Tip" : tipPct > 0 ? `Tip ${tipPct}%` : "";
   const total = subtotal + tipAmount;
 
-  const isLastItemRow = (idx: number) => idx === rows.length - 1 && tipPct === 0;
+  const isLastItemRow = (idx: number) => idx === rows.length - 1 && tipAmount === 0;
 
   return (
     <Document>
@@ -205,12 +207,10 @@ export default function InvoicePDF({ invoice, company, logoBase64 }: Props) {
           ))}
 
           {/* Tip row */}
-          {tipPct > 0 && (
+          {tipAmount > 0 && (
             <View style={s.tableLastRow}>
               <Text style={[s.tipCell, s.colQty]}></Text>
-              <Text style={[s.tipCell, s.colDesc]}>
-                {L.tip} {Number.isInteger(tipPct) ? tipPct : tipPct}%
-              </Text>
+              <Text style={[s.tipCell, s.colDesc]}>{tipLabel}</Text>
               <Text style={[s.tipCell, s.colVat]}>-</Text>
               <Text style={[s.tipCell, s.colPrice]}>-</Text>
               <Text style={[s.tipCell, s.colSum]}>{formatEuro(tipAmount)}</Text>

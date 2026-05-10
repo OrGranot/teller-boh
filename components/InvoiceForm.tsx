@@ -83,8 +83,14 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [items, setItems] = useState<InvoiceItem[]>(
     initial?.items?.length ? initial.items : [EMPTY_ITEM()]
   );
-  const [tipEnabled, setTipEnabled] = useState(parseNum(initial?.tip_percent || "0") > 0);
+  const [tipEnabled, setTipEnabled] = useState(
+    parseNum(initial?.tip_percent || "0") > 0 || parseNum(initial?.tip_amount || "0") > 0
+  );
+  const [tipMode, setTipMode] = useState<"percent" | "amount">(
+    parseNum(initial?.tip_amount || "0") > 0 ? "amount" : "percent"
+  );
   const [tipPercent, setTipPercent] = useState(initial?.tip_percent || "10");
+  const [tipFixed, setTipFixed] = useState(initial?.tip_amount || "");
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -98,7 +104,9 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
+  const [contactHighlight, setContactHighlight] = useState(-1);
   const [itemSuggestions, setItemSuggestions] = useState<{ items: CatalogItem[]; rowIdx: number } | null>(null);
+  const [itemHighlight, setItemHighlight] = useState(-1);
   const contactRef = useRef<HTMLDivElement>(null);
   const itemSugRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +130,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   function handleCustomerNameChange(v: string) {
     setCustomerName(v);
+    setContactHighlight(-1);
     if (v.length < 1) { setContactSuggestions([]); return; }
     const matches = contacts.filter((c) =>
       c.name.toLowerCase().includes(v.toLowerCase())
@@ -145,6 +154,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   function handleDescChange(idx: number, v: string) {
     updateItem(idx, "description", v);
+    setItemHighlight(-1);
     if (v.length < 1) { setItemSuggestions(null); return; }
     const matches = catalogItems.filter((ci) =>
       ci.name.toLowerCase().includes(v.toLowerCase()) ||
@@ -322,8 +332,10 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   const activeItems = items.filter((i) => i.description.trim());
   const subtotal = activeItems.reduce((acc, item) => acc + calcRowSum(item), 0);
-  const tipPct = tipEnabled ? parseNum(tipPercent) : 0;
-  const tipAmount = tipPct > 0 ? subtotal * tipPct / 100 : 0;
+  const tipPct = tipEnabled && tipMode === "percent" ? parseNum(tipPercent) : 0;
+  const tipAmount = tipEnabled
+    ? (tipMode === "amount" ? parseNum(tipFixed) : tipPct > 0 ? subtotal * tipPct / 100 : 0)
+    : 0;
   const total = subtotal + tipAmount;
 
   function buildInvoice(): Invoice {
@@ -340,7 +352,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       customer_tax_number: custTaxNum || undefined,
       customer_vat_number: custVatNum || undefined,
       items: activeItems,
-      tip_percent: tipEnabled ? tipPercent : "0",
+      tip_percent: tipEnabled && tipMode === "percent" ? tipPercent : "0",
+      tip_amount: tipEnabled && tipMode === "amount" ? tipFixed : undefined,
       lang,
       status: isPaid ? "paid" : initial?.status,
       notes: notes.trim() || undefined,
@@ -398,8 +411,9 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     const invoice = { ...buildInvoice(), invoice_number: num };
     const supabase2 = createClient();
     const tipPctVal = parseNum(invoice.tip_percent || "0");
+    const tipAmtVal = tipEnabled && tipMode === "amount" ? parseNum(tipFixed) : 0;
     const subtotalVal = activeItems.reduce((acc, item) => acc + calcRowSum(item), 0);
-    const totalVal = subtotalVal + (tipPctVal > 0 ? subtotalVal * tipPctVal / 100 : 0);
+    const totalVal = subtotalVal + (tipAmtVal > 0 ? tipAmtVal : tipPctVal > 0 ? subtotalVal * tipPctVal / 100 : 0);
 
     let id = savedId;
     if (id) {
@@ -412,6 +426,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         customer_tax_number: invoice.customer_tax_number || null,
         customer_vat_number: invoice.customer_vat_number || null,
         tip_percent: tipPctVal,
+        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
         lang: invoice.lang,
         total: totalVal,
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
@@ -431,6 +446,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         customer_tax_number: invoice.customer_tax_number || null,
         customer_vat_number: invoice.customer_vat_number || null,
         tip_percent: tipPctVal,
+        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
         lang: invoice.lang,
         total: totalVal,
         status: isPaid ? "paid" : "draft",
@@ -581,18 +597,26 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                 type="text"
                 value={customerName}
                 onChange={(e) => handleCustomerNameChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (!contactSuggestions.length) return;
+                  if (e.key === "ArrowDown") { e.preventDefault(); setContactHighlight(h => Math.min(h + 1, contactSuggestions.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setContactHighlight(h => Math.max(h - 1, 0)); }
+                  else if (e.key === "Enter" && contactHighlight >= 0) { e.preventDefault(); selectContact(contactSuggestions[contactHighlight]); setContactHighlight(-1); }
+                  else if (e.key === "Escape") { setContactSuggestions([]); setContactHighlight(-1); }
+                }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
                 placeholder="Company or person name"
                 required
               />
               {contactSuggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
-                  {contactSuggestions.map((c) => (
+                  {contactSuggestions.map((c, i) => (
                     <button
                       key={c.id}
                       type="button"
                       onMouseDown={() => selectContact(c)}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                      onMouseEnter={() => setContactHighlight(i)}
+                      className={`w-full text-left px-4 py-2.5 text-sm border-b border-gray-100 last:border-0 ${i === contactHighlight ? "bg-indigo-50" : "hover:bg-gray-50"}`}
                     >
                       <span className="font-semibold">{c.name}</span>
                       {c.address && <span className="text-gray-400 text-xs block truncate">{c.address}</span>}
@@ -760,17 +784,25 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                           type="text"
                           value={item.description}
                           onChange={(e) => handleDescChange(idx, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (!itemSuggestions || itemSuggestions.rowIdx !== idx) return;
+                            if (e.key === "ArrowDown") { e.preventDefault(); setItemHighlight(h => Math.min(h + 1, itemSuggestions.items.length - 1)); }
+                            else if (e.key === "ArrowUp") { e.preventDefault(); setItemHighlight(h => Math.max(h - 1, 0)); }
+                            else if (e.key === "Enter" && itemHighlight >= 0) { e.preventDefault(); selectCatalogItem(itemSuggestions.items[itemHighlight], idx); setItemHighlight(-1); }
+                            else if (e.key === "Escape") { setItemSuggestions(null); setItemHighlight(-1); }
+                          }}
                           className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-gray-700 bg-gray-50"
                           placeholder="Description"
                         />
                         {itemSuggestions?.rowIdx === idx && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
-                            {itemSuggestions.items.map((ci) => (
+                            {itemSuggestions.items.map((ci, i) => (
                               <button
                                 key={ci.id}
                                 type="button"
                                 onMouseDown={() => selectCatalogItem(ci, idx)}
-                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                                onMouseEnter={() => setItemHighlight(i)}
+                                className={`w-full text-left px-4 py-2.5 text-sm border-b border-gray-100 last:border-0 ${i === itemHighlight ? "bg-indigo-50" : "hover:bg-gray-50"}`}
                               >
                                 <span className="font-semibold">{ci.name}</span>
                                 {ci.price && (
@@ -848,17 +880,40 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
             <span className="text-sm font-semibold">Add tip</span>
           </label>
           {tipEnabled && (
-            <div className="flex items-center gap-3">
-              <input
-                type="text"
-                value={tipPercent}
-                onChange={(e) => setTipPercent(e.target.value)}
-                className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-800 text-center bg-gray-50"
-                placeholder="10"
-              />
-              <span className="text-sm text-gray-500">%</span>
-              {tipAmount > 0 && (
-                <span className="text-sm text-gray-500">= {formatEuro(tipAmount)}</span>
+            <div className="flex items-center gap-2">
+              {/* Mode toggle */}
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setTipMode("percent")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${tipMode === "percent" ? "bg-gray-800 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                >%</button>
+                <button
+                  type="button"
+                  onClick={() => setTipMode("amount")}
+                  className={`px-3 py-1.5 font-medium transition-colors ${tipMode === "amount" ? "bg-gray-800 text-white" : "bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                >€</button>
+              </div>
+              {tipMode === "percent" ? (
+                <>
+                  <input
+                    type="text"
+                    value={tipPercent}
+                    onChange={(e) => setTipPercent(e.target.value)}
+                    className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-800 text-center bg-gray-50"
+                    placeholder="10"
+                  />
+                  <span className="text-sm text-gray-400">%</span>
+                  {tipAmount > 0 && <span className="text-sm text-gray-500">= {formatEuro(tipAmount)}</span>}
+                </>
+              ) : (
+                <input
+                  type="text"
+                  value={tipFixed}
+                  onChange={(e) => setTipFixed(e.target.value)}
+                  className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-800 text-right bg-gray-50"
+                  placeholder="0,00"
+                />
               )}
             </div>
           )}
@@ -874,7 +929,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
           )}
           {tipEnabled && tipAmount > 0 && (
             <div className="flex gap-8 text-sm text-gray-500">
-              <span>Tip {tipPercent}%</span>
+              <span>Tip {tipMode === "percent" ? `${tipPercent}%` : ""}</span>
               <span className="w-28 text-right">{formatEuro(tipAmount)}</span>
             </div>
           )}

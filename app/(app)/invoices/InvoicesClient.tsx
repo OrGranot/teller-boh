@@ -93,12 +93,14 @@ export default function InvoicesClient({ restaurantId }: Props) {
 
       const invoice = {
         ...full,
+        tip_percent: String(full?.tip_percent ?? "0"),
+        tip_amount: full?.tip_amount != null ? String(full.tip_amount) : undefined,
         items: (items || []).map((it) => ({
-          qty: String(it.qty),
-          description: it.description,
-          price: String(it.price),
-          vat_rate: String(it.vat_rate),
-          sum: "",
+          qty: String(it.qty ?? 1),
+          description: it.description ?? "",
+          price: String(it.price ?? 0),
+          vat_rate: String(it.vat_rate ?? 7),
+          sum: it.sum != null ? String(it.sum) : "",
         })),
       };
 

@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
   try {
     const { invoice }: { invoice: Invoice } = await req.json();
 
-    // Load company settings for this restaurant
-    const { data: company } = await supabase
+    // Load company settings for this restaurant (fall back to any row if migration not yet run)
+    let { data: company } = await supabase
       .from("company_settings")
       .select("*")
       .eq("restaurant_id", restaurantId)
@@ -44,8 +44,17 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!company) {
+      const { data: fallback } = await supabase
+        .from("company_settings")
+        .select("*")
+        .limit(1)
+        .single();
+      company = fallback;
+    }
+
+    if (!company) {
       return NextResponse.json(
-        { error: "Company settings not found" },
+        { error: "Company settings not found. Please set up your company details first." },
         { status: 400 }
       );
     }
@@ -64,8 +73,9 @@ export async function POST(req: NextRequest) {
       const manSum = parseFloat(item.sum || "0");
       return acc + (manSum > 0 ? manSum : qty * price * (1 + vat / 100));
     }, 0);
-    const tipPct = parseFloat(invoice.tip_percent || "0");
-    const tipAmt = tipPct > 0 ? (subtotal * tipPct) / 100 : 0;
+    const tipPct = parseFloat(String(invoice.tip_percent || "0"));
+    const tipFixedAmt = parseFloat(String(invoice.tip_amount || "0"));
+    const tipAmt = tipFixedAmt > 0 ? tipFixedAmt : tipPct > 0 ? (subtotal * tipPct) / 100 : 0;
     const total = subtotal + tipAmt;
 
     let savedInvoiceId = invoice.id;
@@ -82,6 +92,7 @@ export async function POST(req: NextRequest) {
           customer_tax_number: invoice.customer_tax_number || null,
           customer_vat_number: invoice.customer_vat_number || null,
           tip_percent: tipPct,
+          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
           lang: invoice.lang,
           total,
           status: invoice.status === "paid" ? "paid" : "sent",
@@ -108,6 +119,7 @@ export async function POST(req: NextRequest) {
           customer_tax_number: invoice.customer_tax_number || null,
           customer_vat_number: invoice.customer_vat_number || null,
           tip_percent: tipPct,
+          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
           lang: invoice.lang,
           total,
           status: "sent",
