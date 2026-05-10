@@ -85,6 +85,24 @@ export default async function EditInvoicePage({
     };
   });
 
+  // Resolve tip — prefer explicit tip_amount column; if that column doesn't
+  // exist yet (migration pending), infer a fixed tip from the difference
+  // between the stored total and the computed subtotal.
+  const tipPercent = Number(inv.tip_percent ?? 0);
+  const tipAmountFromDb = inv.tip_amount != null ? Number(inv.tip_amount) : null;
+  const computedSubtotal = items.reduce((acc, item) => {
+    const s = Number(item.sum);
+    return acc + (s > 0 ? s : Number(item.qty) * Number(item.price) * (1 + Number(item.vat_rate) / 100));
+  }, 0);
+  const storedTotal = Number(inv.total ?? 0);
+  const inferredFixedTip =
+    tipAmountFromDb == null && tipPercent === 0 && storedTotal > computedSubtotal + 0.005
+      ? Math.round((storedTotal - computedSubtotal) * 100) / 100
+      : null;
+  const resolvedTipAmount = tipAmountFromDb != null ? String(tipAmountFromDb)
+    : inferredFixedTip != null ? String(inferredFixedTip)
+    : undefined;
+
   const invoice: Invoice = {
     id: inv.id,
     invoice_number: inv.invoice_number,
@@ -96,8 +114,8 @@ export default async function EditInvoicePage({
     customer_trade_register: inv.customer_trade_register || "",
     customer_tax_number: inv.customer_tax_number || "",
     customer_vat_number: inv.customer_vat_number || "",
-    tip_percent: String(inv.tip_percent ?? "0"),
-    tip_amount: inv.tip_amount != null ? String(inv.tip_amount) : undefined,
+    tip_percent: String(tipPercent),
+    tip_amount: resolvedTipAmount,
     lang: (inv.lang || "de") as "de" | "en",
     status: inv.status,
     notes: inv.notes || "",
