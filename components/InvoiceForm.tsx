@@ -725,7 +725,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-visible">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs font-semibold text-gray-400 border-b border-gray-100">
