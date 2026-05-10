@@ -61,15 +61,6 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "website",
-    label: "Website",
-    icon: "🌐",
-    ownerOnly: true,
-    items: [
-      { href: "/website", label: "Website Editor", ownerOnly: true },
-    ],
-  },
-  {
     id: "settings",
     label: "Settings",
     icon: "⚙",
