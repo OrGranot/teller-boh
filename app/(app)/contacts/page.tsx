@@ -18,7 +18,7 @@ export default async function ContactsPage() {
     .single();
   if (!member) redirect("/setup");
 
-  const role = member.role as {
+  const role = member.role as unknown as {
     is_owner: boolean;
     permissions: Record<string, boolean>;
   } | null;

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     .eq("profile_id", user.id)
     .single();
 
-  const callerRole = caller?.role as { is_owner: boolean } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean } | null;
   if (!caller || !callerRole?.is_owner) {
     return NextResponse.json({ error: "Only owners can re-invite members" }, { status: 403 });
   }

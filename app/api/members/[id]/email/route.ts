@@ -22,7 +22,7 @@ export async function PATCH(
     .eq("profile_id", user.id)
     .single();
 
-  const callerRole = caller?.role as { is_owner: boolean } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean } | null;
   if (!caller || !callerRole?.is_owner) {
     return NextResponse.json({ error: "Only owners can set member emails" }, { status: 403 });
   }
@@ -209,7 +209,7 @@ export async function DELETE(
     .eq("profile_id", user.id)
     .single();
 
-  const callerRole = caller?.role as { is_owner: boolean } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean } | null;
   if (!caller || !callerRole?.is_owner) {
     return NextResponse.json({ error: "Only owners can unlink employee accounts" }, { status: 403 });
   }

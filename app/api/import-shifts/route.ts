@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
     .eq("profile_id", user.id)
     .single();
 
-  const callerRole = caller?.role as { is_owner: boolean; permissions: Record<string, boolean> } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> } | null;
   if (!caller || (!callerRole?.is_owner && !callerRole?.permissions?.can_edit_shifts)) {
     return NextResponse.json({ error: "No permission to import shifts" }, { status: 403 });
   }

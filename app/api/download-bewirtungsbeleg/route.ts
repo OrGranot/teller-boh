@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     .single();
   if (!member) return NextResponse.json({ error: "No restaurant" }, { status: 403 });
 
-  const role = member.role as {
+  const role = member.role as unknown as {
     is_owner: boolean;
     permissions: Record<string, boolean>;
   } | null;

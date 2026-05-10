@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     .eq("profile_id", user.id)
     .single();
 
-  const role = caller?.role as { is_owner: boolean; permissions: Record<string, boolean> } | null;
+  const role = caller?.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> } | null;
   if (!caller || (!role?.is_owner && !role?.permissions?.can_edit_shifts)) {
     return NextResponse.json({ error: "No permission" }, { status: 403 });
   }

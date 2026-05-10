@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!me) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  const role = me.role as { is_owner: boolean; permissions: Record<string, boolean> };
+  const role = me.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> };
   if (!role.is_owner && !role.permissions?.can_approve_invitations) {
     return NextResponse.json({ error: "No permission" }, { status: 403 });
   }

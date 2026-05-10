@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   if (invitation.status === "pending_approval") return NextResponse.json({ error: "Invitation not yet approved" }, { status: 403 });
   if (new Date(invitation.expires_at) < new Date()) return NextResponse.json({ error: "Invitation has expired" }, { status: 410 });
 
-  const restaurant = invitation.restaurant as { name: string } | null;
+  const restaurant = invitation.restaurant as unknown as { name: string } | null;
 
   return NextResponse.json({
     email: invitation.email,

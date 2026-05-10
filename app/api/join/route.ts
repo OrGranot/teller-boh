@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         user_metadata: { name: invitation.name },
       });
       if (rehydrateErr) return NextResponse.json({ error: rehydrateErr.message }, { status: 500 });
-      existingUser = { id: shadowId as string, email } as typeof existingUser;
+      existingUser = { id: shadowId as string, email } as unknown as typeof existingUser;
     }
   }
 
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     });
     if (createErr || !newUser.user) {
       console.error("[join] createUser failed:", JSON.stringify(createErr));
-      return NextResponse.json({ error: createErr?.message || "Failed to create account", detail: (createErr as Record<string, unknown>) }, { status: 500 });
+      return NextResponse.json({ error: createErr?.message || "Failed to create account", detail: (createErr as unknown as Record<string, unknown>) }, { status: 500 });
     }
     userId = newUser.user.id;
   }

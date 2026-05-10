@@ -8,7 +8,7 @@ async function getOwnerContext(userId: string, admin: Awaited<ReturnType<typeof 
     .select("restaurant_id, role:roles(is_owner)")
     .eq("profile_id", userId)
     .single();
-  const callerRole = caller?.role as { is_owner: boolean } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean } | null;
   if (!caller || !callerRole?.is_owner) return null;
   return caller as { restaurant_id: string };
 }

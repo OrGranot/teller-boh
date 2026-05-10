@@ -14,14 +14,14 @@ export default async function ShiftsPage() {
 
   if (!member) return null;
 
-  const role = member.role as { is_owner: boolean; permissions: Record<string, boolean> };
+  const role = member.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> };
   const canViewAll = role.is_owner || role.permissions?.can_view_all_shifts;
   const canApprove = role.is_owner || role.permissions?.can_approve_shifts;
   const canEdit = role.is_owner || role.permissions?.can_edit_shifts;
 
   const { data: departments } = await supabase
     .from("departments")
-    .select("id, name")
+    .select("id, name, restaurant_id, created_at")
     .eq("restaurant_id", member.restaurant_id);
 
   // Load team members + their profiles server-side (avoids client RLS join issues)

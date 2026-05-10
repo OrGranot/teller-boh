@@ -18,7 +18,7 @@ export async function PATCH(
     .eq("profile_id", user.id)
     .single();
 
-  const callerRole = caller?.role as { is_owner: boolean } | null;
+  const callerRole = caller?.role as unknown as { is_owner: boolean } | null;
   if (!caller || !callerRole?.is_owner) {
     return NextResponse.json({ error: "Only owners can edit contract details" }, { status: 403 });
   }

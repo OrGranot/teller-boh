@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   if (!me) return NextResponse.json({ error: "Not a restaurant member" }, { status: 403 });
 
-  const role = me.role as { is_owner: boolean; permissions: Record<string, boolean> };
+  const role = me.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> };
   const canInvite = role.is_owner || role.permissions?.can_invite;
   if (!canInvite) return NextResponse.json({ error: "No permission to invite" }, { status: 403 });
 

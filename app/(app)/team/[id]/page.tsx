@@ -22,7 +22,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     .select("restaurant_id, role:roles(is_owner)")
     .eq("profile_id", user!.id)
     .single();
-  const currentRole = currentMember?.role as { is_owner: boolean } | null;
+  const currentRole = currentMember?.role as unknown as { is_owner: boolean } | null;
   const isOwner = !!currentRole?.is_owner;
 
   const { data: member } = await supabase
@@ -33,8 +33,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
   if (!member) return <div className="px-8 py-6 text-gray-500">Member not found.</div>;
 
-  const profile = member.profile as { name: string | null; phone: string | null; address: string | null; birthdate: string | null; is_placeholder: boolean } | null;
-  const role = member.role as { id: string; name: string; is_owner: boolean } | null;
+  const profile = member.profile as unknown as { name: string | null; phone: string | null; address: string | null; birthdate: string | null; is_placeholder: boolean } | null;
+  const role = member.role as unknown as { id: string; name: string; is_owner: boolean } | null;
 
   // Get email from auth.users (only available server-side with admin)
   const { data: authUser } = await admin.auth.admin.getUserById(id);
