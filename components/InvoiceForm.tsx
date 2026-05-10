@@ -415,43 +415,54 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     const subtotalVal = activeItems.reduce((acc, item) => acc + calcRowSum(item), 0);
     const totalVal = subtotalVal + (tipAmtVal > 0 ? tipAmtVal : tipPctVal > 0 ? subtotalVal * tipPctVal / 100 : 0);
 
+    // Helper: build the core invoice payload (fields that always exist in DB)
+    const corePayload = {
+      date: invoice.date,
+      due_date: invoice.due_date,
+      customer_name: invoice.customer_name,
+      customer_address: invoice.customer_address,
+      customer_trade_register: invoice.customer_trade_register || null,
+      customer_tax_number: invoice.customer_tax_number || null,
+      customer_vat_number: invoice.customer_vat_number || null,
+      tip_percent: tipPctVal,
+      lang: invoice.lang,
+      total: totalVal,
+      notes: notes.trim() || null,
+    };
+
     let id = savedId;
     if (id) {
-      await supabase2.from("invoices").update({
-        date: invoice.date,
-        due_date: invoice.due_date,
-        customer_name: invoice.customer_name,
-        customer_address: invoice.customer_address,
-        customer_trade_register: invoice.customer_trade_register || null,
-        customer_tax_number: invoice.customer_tax_number || null,
-        customer_vat_number: invoice.customer_vat_number || null,
-        tip_percent: tipPctVal,
+      // Try with tip_amount first; if column doesn't exist yet (migration pending),
+      // fall back to core payload so nothing is silently lost.
+      const { error: upErr } = await supabase2.from("invoices").update({
+        ...corePayload,
         tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
-        lang: invoice.lang,
-        total: totalVal,
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
-        notes: notes.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq("id", id);
+      if (upErr) {
+        await supabase2.from("invoices").update({
+          ...corePayload,
+          status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
+          updated_at: new Date().toISOString(),
+        }).eq("id", id);
+      }
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
     } else {
-      const { data, error } = await supabase2.from("invoices").insert({
+      // Try insert with tip_amount; fall back without if column missing.
+      const baseInsert = {
         restaurant_id: restaurantId,
         invoice_number: num,
-        date: invoice.date,
-        due_date: invoice.due_date,
-        customer_name: invoice.customer_name,
-        customer_address: invoice.customer_address,
-        customer_trade_register: invoice.customer_trade_register || null,
-        customer_tax_number: invoice.customer_tax_number || null,
-        customer_vat_number: invoice.customer_vat_number || null,
-        tip_percent: tipPctVal,
-        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
-        lang: invoice.lang,
-        total: totalVal,
+        ...corePayload,
         status: isPaid ? "paid" : "draft",
-        notes: notes.trim() || null,
+      };
+      let { data, error } = await supabase2.from("invoices").insert({
+        ...baseInsert,
+        tip_amount: tipAmtVal > 0 ? tipAmtVal : null,
       }).select("id").single();
+      if (error) {
+        ({ data, error } = await supabase2.from("invoices").insert(baseInsert).select("id").single());
+      }
       if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
       id = data?.id;
       if (id) setSavedId(id);

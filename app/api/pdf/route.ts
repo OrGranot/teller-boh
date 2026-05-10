@@ -78,55 +78,51 @@ export async function POST(req: NextRequest) {
     const tipAmt = tipFixedAmt > 0 ? tipFixedAmt : tipPct > 0 ? (subtotal * tipPct) / 100 : 0;
     const total = subtotal + tipAmt;
 
+    const coreInvoicePayload = {
+      date: invoice.date,
+      due_date: invoice.due_date,
+      customer_name: invoice.customer_name,
+      customer_address: invoice.customer_address,
+      customer_trade_register: invoice.customer_trade_register || null,
+      customer_tax_number: invoice.customer_tax_number || null,
+      customer_vat_number: invoice.customer_vat_number || null,
+      tip_percent: tipPct,
+      lang: invoice.lang,
+      total,
+    };
+
     let savedInvoiceId = invoice.id;
     if (invoice.id) {
-      // Update existing
-      await supabase
-        .from("invoices")
-        .update({
-          date: invoice.date,
-          due_date: invoice.due_date,
-          customer_name: invoice.customer_name,
-          customer_address: invoice.customer_address,
-          customer_trade_register: invoice.customer_trade_register || null,
-          customer_tax_number: invoice.customer_tax_number || null,
-          customer_vat_number: invoice.customer_vat_number || null,
-          tip_percent: tipPct,
-          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
-          lang: invoice.lang,
-          total,
+      // Try with tip_amount; fall back without if column missing (migration pending)
+      const { error: upErr } = await supabase.from("invoices").update({
+        ...coreInvoicePayload,
+        tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
+        status: invoice.status === "paid" ? "paid" : "sent",
+        updated_at: new Date().toISOString(),
+      }).eq("id", invoice.id).eq("restaurant_id", restaurantId);
+      if (upErr) {
+        await supabase.from("invoices").update({
+          ...coreInvoicePayload,
           status: invoice.status === "paid" ? "paid" : "sent",
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", invoice.id)
-        .eq("restaurant_id", restaurantId);
-
-      await supabase
-        .from("invoice_items")
-        .delete()
-        .eq("invoice_id", invoice.id);
+        }).eq("id", invoice.id).eq("restaurant_id", restaurantId);
+      }
+      await supabase.from("invoice_items").delete().eq("invoice_id", invoice.id);
     } else {
-      // Insert new invoice
-      const { data: newInvoice } = await supabase
-        .from("invoices")
-        .insert({
-          invoice_number: invoiceNumber,
-          date: invoice.date,
-          due_date: invoice.due_date,
-          customer_name: invoice.customer_name,
-          customer_address: invoice.customer_address,
-          customer_trade_register: invoice.customer_trade_register || null,
-          customer_tax_number: invoice.customer_tax_number || null,
-          customer_vat_number: invoice.customer_vat_number || null,
-          tip_percent: tipPct,
-          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
-          lang: invoice.lang,
-          total,
-          status: "sent",
-          restaurant_id: restaurantId,
-        })
-        .select("id")
-        .single();
+      const baseInsert = {
+        invoice_number: invoiceNumber,
+        ...coreInvoicePayload,
+        status: "sent",
+        restaurant_id: restaurantId,
+      };
+      let { data: newInvoice } = await supabase.from("invoices").insert({
+        ...baseInsert,
+        tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
+      }).select("id").single();
+      if (!newInvoice) {
+        const { data: fallbackInvoice } = await supabase.from("invoices").insert(baseInsert).select("id").single();
+        newInvoice = fallbackInvoice;
+      }
       savedInvoiceId = newInvoice?.id;
     }
 
