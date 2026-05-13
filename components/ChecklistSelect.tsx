@@ -23,14 +23,16 @@ export default function ChecklistSelect({ values, onChange, options, placeholder
   const [open,  setOpen]  = useState(false);
   const [query, setQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef  = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false); setQuery("");
-      }
+      const t = e.target as Node;
+      const inTrigger  = containerRef.current?.contains(t);
+      const inDropdown = dropdownRef.current?.contains(t);
+      if (!inTrigger && !inDropdown) { setOpen(false); setQuery(""); }
     }
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
@@ -73,6 +75,7 @@ export default function ChecklistSelect({ values, onChange, options, placeholder
 
   const dropdown = open ? (
     <div
+      ref={dropdownRef}
       style={dropdownStyle}
       className="bg-white border border-gray-200 rounded-xl shadow-lg"
     >
