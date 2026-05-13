@@ -28,8 +28,8 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    id: "labor",
-    label: "Labor",
+    id: "people",
+    label: "People",
     icon: "⏱",
     items: [
       { href: "/shifts",      label: "Shifts" },
@@ -107,6 +107,10 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
   const perms   = ctx.role.permissions as Record<string, boolean>;
   const isOwner = ctx.role.is_owner;
 
+  // Basic employees see a flat two-item nav (no groups, no dropdowns)
+  const isEmployee = !isOwner && !perms.can_view_all_shifts && !perms.can_manage_departments &&
+    !perms.can_manage_invoices && !perms.can_manage_bewirtungsbeleg && !perms.can_manage_vouchers;
+
   function toggleGroup(id: string) {
     setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }));
   }
@@ -134,13 +138,38 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
     <aside className="hidden md:flex w-56 flex-col fixed inset-y-0 left-0 z-20" style={{ background: "#1a1a1a" }}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-white/10">
-        <span className="text-white font-bold text-lg tracking-tight">Teller BOH</span>
+        <span className="text-white font-bold text-lg tracking-tight">Teller Berlin</span>
         <span className="text-gray-400 text-xs block mt-0.5 truncate">{ctx.restaurantName}</span>
       </div>
 
-      {/* Nav groups */}
+      {/* Nav */}
       <nav className="flex-1 px-3 py-3 overflow-y-auto">
-        {NAV_GROUPS.map(group => {
+
+        {/* ── Employee flat nav ── */}
+        {isEmployee ? (
+          <div className="space-y-0.5">
+            {/* Dashboard — placeholder until built */}
+            <span className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-600 cursor-not-allowed select-none">
+              <span className="text-sm w-5 text-center flex-shrink-0">◎</span>
+              <span className="font-medium">Dashboard</span>
+              <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/10 text-gray-500">soon</span>
+            </span>
+            <Link
+              href="/shifts"
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                pathname.startsWith("/shifts")
+                  ? "bg-white/15 text-white font-semibold"
+                  : "text-gray-400 hover:text-white hover:bg-white/8"
+              }`}
+            >
+              <span className="text-sm w-5 text-center flex-shrink-0">⏱</span>
+              <span className="font-medium">Shifts</span>
+            </Link>
+          </div>
+        ) : (
+
+        /* ── Owner / manager grouped nav ── */
+        NAV_GROUPS.map(group => {
           const groupVisible = canSee(group, isOwner, perms);
           if (!groupVisible) return null;
 
@@ -156,7 +185,6 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
 
           return (
             <div key={group.id} className="mb-1">
-              {/* Group header */}
               <button
                 onClick={() => toggleGroup(group.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -170,7 +198,6 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
                 <span className={`text-xs transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>›</span>
               </button>
 
-              {/* Group items */}
               {isOpen && (
                 <div className="ml-3 mt-0.5 border-l border-white/10 pl-2 space-y-0.5">
                   {visibleItems.map(item => {
@@ -195,7 +222,8 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
               )}
             </div>
           );
-        })}
+        })
+        )}
       </nav>
 
       {/* Import status */}

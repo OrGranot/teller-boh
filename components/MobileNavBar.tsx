@@ -41,6 +41,9 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
     return true;
   });
 
+  const isEmployee = !isOwner && !perms.can_view_all_shifts && !perms.can_manage_departments &&
+    !perms.can_manage_invoices && !perms.can_manage_bewirtungsbeleg && !perms.can_manage_vouchers;
+
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -104,7 +107,27 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
 
         {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {visibleNav.map(item => {
+          {isEmployee ? (
+            <>
+              <span className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 cursor-not-allowed select-none">
+                <span className="text-base w-5 text-center">◎</span>
+                Dashboard
+                <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/10 text-gray-500">soon</span>
+              </span>
+              <Link
+                href="/shifts"
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  pathname.startsWith("/shifts")
+                    ? "bg-white/15 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-white/8"
+                }`}
+              >
+                <span className="text-base w-5 text-center">⏱</span>
+                Shifts
+              </Link>
+            </>
+          ) : visibleNav.map(item => {
             const active = pathname.startsWith(item.href);
             return (
               <Link
