@@ -1,9 +1,11 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import MemberActions from "./MemberActions";
 import MemberInfoClient from "./MemberInfoClient";
 import MemberShiftsClient from "./MemberShiftsClient";
 import MemberMergeButton from "./MemberMergeButton";
+import MemberDeleteButton from "./MemberDeleteButton";
 import MemberNameHeader from "./MemberNameHeader";
 import ContractBalanceClient from "./ContractBalanceClient";
 import DepartmentTags from "@/components/DepartmentTags";
@@ -178,6 +180,16 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     .eq("profile_id", id)
     .order("clocked_in_at", { ascending: false });
 
+  // Auto-delete: placeholder with no email and no shifts → clean up and redirect
+  if (isOwner && profile?.is_placeholder && !authEmail && (allShifts ?? []).length === 0) {
+    await admin.from("department_members").delete().eq("profile_id", id);
+    await admin.from("member_contracts").delete().eq("profile_id", id);
+    await admin.from("hours_adjustments").delete().eq("profile_id", id);
+    await admin.from("restaurant_members").delete().eq("profile_id", id).eq("restaurant_id", currentMember!.restaurant_id);
+    await admin.from("profiles").delete().eq("id", id);
+    redirect("/team");
+  }
+
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       <Link href="/team" className="text-sm text-gray-400 hover:text-gray-600 mb-4 inline-block">
@@ -194,11 +206,14 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                 This employee was created from a CSV import. You can invite them by adding an email below, or merge their shifts into an existing employee.
               </p>
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
             <MemberMergeButton
               placeholderId={id}
               placeholderName={profile?.name ?? null}
               employees={mergeableEmployees}
             />
+            <MemberDeleteButton profileId={id} restaurantId={currentMember!.restaurant_id} />
+            </div>
           </div>
         </div>
       )}
