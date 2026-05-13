@@ -3,7 +3,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendInvitationEmail } from "@/app/api/invite/route";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -83,7 +83,7 @@ export async function POST(
     return NextResponse.json({ error: insertErr?.message || "Failed to create invitation" }, { status: 500 });
   }
 
-  await sendInvitationEmail(newInv, caller.restaurant_id, admin);
+  await sendInvitationEmail(newInv, caller.restaurant_id, admin, new URL(req.url).origin);
 
   return NextResponse.json({ ok: true });
 }

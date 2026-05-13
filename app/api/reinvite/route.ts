@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!inv) return NextResponse.json({ error: "No invitation found for this user" }, { status: 404 });
 
   // Resend the email with the existing token (no data changes)
-  await sendInvitationEmail(inv, caller.restaurant_id, admin);
+  await sendInvitationEmail(inv, caller.restaurant_id, admin, new URL(req.url).origin);
   await admin.from("invitations").update({ status: "sent" }).eq("id", inv.id);
 
   return NextResponse.json({ ok: true });

@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
 
   // If auto-approved, send email immediately
   if (autoApprove) {
-    await sendInvitationEmail(invitation, me.restaurant_id, admin);
+    const origin = new URL(req.url).origin;
+    await sendInvitationEmail(invitation, me.restaurant_id, admin, origin);
     await admin.from("invitations").update({ status: "sent" }).eq("id", invitation.id);
   }
 
@@ -104,7 +105,8 @@ export async function POST(req: NextRequest) {
 export async function sendInvitationEmail(
   invitation: { token: string; email: string; name: string | null },
   restaurantId: string,
-  admin: Awaited<ReturnType<typeof createAdminClient>>
+  admin: Awaited<ReturnType<typeof createAdminClient>>,
+  origin: string,
 ) {
   const { data: restaurant } = await admin
     .from("restaurants")
@@ -112,7 +114,6 @@ export async function sendInvitationEmail(
     .eq("id", restaurantId)
     .single();
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const joinUrl = `${origin}/join/${invitation.token}`;
   const restaurantName = restaurant?.name || "your restaurant";
 

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No permission" }, { status: 403 });
   }
 
-  await sendInvitationEmail(invitation, invitation.restaurant_id, admin);
+  await sendInvitationEmail(invitation, invitation.restaurant_id, admin, new URL(req.url).origin);
   await admin.from("invitations").update({ status: "sent" }).eq("id", invitationId);
 
   return NextResponse.json({ ok: true });
