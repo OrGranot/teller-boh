@@ -101,7 +101,7 @@ export default function TeamTableClient({
   members: MemberRow[];
   allDepartments: Department[];
   serverToday: string;
-  pendingInvitations: PendingInvitation[];
+  pendingInvitations?: PendingInvitation[];
 }) {
   const [nameFilter,   setNameFilter]   = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<Status[]>(["active", "imported"]);
@@ -111,7 +111,7 @@ export default function TeamTableClient({
   const [localAllDepts, setLocalAllDepts] = useState<Department[]>(allDepartments);
 
   // ── Pending invitations ───────────────────────────────────────────────────
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>(initialPendingInvitations);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>(initialPendingInvitations ?? []);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   async function cancelInvitation(id: string) {
