@@ -333,6 +333,7 @@ export default function MemberShiftsClient({
         currentUserId={currentUserId}
         canEdit={canEdit}
         canApprove={canApprove}
+        hideClockOut
         onRefresh={() => { loadShifts(range); router.refresh(); }}
       />
     </div>

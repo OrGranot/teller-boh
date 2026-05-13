@@ -36,6 +36,8 @@ interface Props {
   /** Called when a dept is auto-deleted (no remaining members) */
   onDepartmentDeleted?: (dept: { id: string; name: string }) => void;
   onRefresh: () => void;
+  /** Hide the clock-out button on active shifts (e.g. when a banner already provides it) */
+  hideClockOut?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -108,7 +110,7 @@ function SortTh({ label, sortKey, current, dir, onSort, className = "" }: {
 // ── Component ─────────────────────────────────────────────────
 export default function ShiftTable({
   shifts, loading, currentUserId, canEdit, canApprove = false, profilesMap, profileDeptMap, allDepartments = [],
-  onDepartmentCreated, onDepartmentToggled, onDepartmentDeleted, onRefresh,
+  onDepartmentCreated, onDepartmentToggled, onDepartmentDeleted, onRefresh, hideClockOut = false,
 }: Props) {
   const supabase = createClient();
   const showEmployee = !!profilesMap;
@@ -380,7 +382,7 @@ export default function ShiftTable({
                   {canEdit && (
                     <td className="hidden sm:table-cell px-4 py-3">
                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {s.status === "active" && (
+                        {s.status === "active" && !hideClockOut && (
                           <button onClick={() => handleClockOut(s.id)} disabled={saving === `${s.id}:clockout`}
                             className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50 transition-colors whitespace-nowrap">
                             {saving === `${s.id}:clockout` ? "…" : "Clock out"}
@@ -445,7 +447,7 @@ export default function ShiftTable({
                                 ✓ Approve
                               </button>
                             )}
-                            {s.status === "active" && (
+                            {s.status === "active" && !hideClockOut && (
                               <button onClick={() => { handleClockOut(s.id); toggleExpand(s.id); }}
                                 disabled={saving === `${s.id}:clockout`}
                                 className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 disabled:opacity-50 transition-colors">
