@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
     await resend.emails.send({
       to: invoice.customer_email,
       from: `${company.name} <${FROM_EMAIL}>`,
+      cc: "hello@tellerberlin.com",
       subject,
       text: body,
       attachments: [

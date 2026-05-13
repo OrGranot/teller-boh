@@ -126,6 +126,14 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [parsingReceipt, setParsingReceipt] = useState(false);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showToast(message: string, type: "success" | "error" | "info" = "info") {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
+  }
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [itemSuggestions, setItemSuggestions] = useState<{ items: CatalogItem[]; rowIdx: number } | null>(null);
@@ -315,7 +323,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       fd.append("receipt", file);
       const res = await fetch("/api/parse-receipt", { method: "POST", body: fd });
       const json = await res.json();
-      if (!res.ok) { alert("Could not read receipt: " + json.error); return; }
+      if (!res.ok) { showToast("Could not read receipt: " + json.error, "error"); return; }
       const parsed: InvoiceItem[] = (json.items as Array<{qty:string; description:string; vat_rate:string; sum:number}>).map((item) => {
         const gross = item.sum;
         const qty = parseNum(item.qty);
@@ -331,7 +339,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       });
       setItems(parsed.length > 0 ? parsed : [EMPTY_ITEM()]);
     } catch (err) {
-      alert("Upload failed: " + err);
+      showToast("Upload failed: " + err, "error");
     } finally {
       setParsingReceipt(false);
     }
@@ -376,7 +384,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleGenerate() {
-    if (!customerName.trim()) { alert("Please enter a customer name."); return; }
+    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
     setGenerating(true);
     await ensureContactSaved();
     try {
@@ -387,7 +395,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       });
       if (!res.ok) {
         const err = await res.json();
-        alert("Error generating PDF: " + err.error);
+        showToast("Error generating PDF: " + err.error, "error");
         return;
       }
       const newId = res.headers.get("X-Invoice-Id");
@@ -410,7 +418,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleSaveDraft() {
-    if (!customerName.trim()) { alert("Please enter a customer name."); return; }
+    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
     setSavingDraft(true);
     await ensureContactSaved();
 
@@ -467,7 +475,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         status: isPaid ? "paid" : initial?.status === "paid" ? "paid" : "draft",
         updated_at: new Date().toISOString(),
       }).eq("id", id);
-      if (upErr) { alert("Save failed: " + upErr.message); setSavingDraft(false); return; }
+      if (upErr) { showToast("Save failed: " + upErr.message, "error"); setSavingDraft(false); return; }
       await supabase2.from("invoice_items").delete().eq("invoice_id", id);
     } else {
       const { data, error } = await supabase2.from("invoices").insert({
@@ -476,7 +484,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         ...invoiceRow,
         status: isPaid ? "paid" : "draft",
       }).select("id").single();
-      if (error) { alert("Save failed: " + error.message); setSavingDraft(false); return; }
+      if (error) { showToast("Save failed: " + error.message, "error"); setSavingDraft(false); return; }
       id = data?.id;
       if (id) setSavedId(id);
     }
@@ -501,8 +509,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleSend() {
-    if (!customerName.trim()) { alert("Please enter a customer name."); return; }
-    if (!custEmail.trim()) { alert("Please enter the recipient's email address."); return; }
+    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
+    if (!custEmail.trim()) { showToast("Please enter the recipient's email address.", "error"); return; }
     setSending(true);
     await ensureContactSaved();
     try {
@@ -512,13 +520,13 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         body: JSON.stringify({ invoice: buildInvoice() }),
       });
       const json = await res.json();
-      if (!res.ok) { alert("Error sending invoice: " + json.error); return; }
+      if (!res.ok) { showToast("Error sending invoice: " + json.error, "error"); return; }
       const newId = json.invoiceId;
       const newNum = json.invoiceNumber;
       if (newId && !savedId) setSavedId(newId);
       if (newNum && !invoiceNumber) setInvoiceNumber(newNum);
-      alert(`Invoice sent to ${custEmail}`);
-      router.push("/invoices");
+      showToast(`Invoice sent to ${custEmail}`, "success");
+      setTimeout(() => router.push("/invoices"), 1500);
     } finally {
       setSending(false);
     }
@@ -528,6 +536,18 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${
+          toast.type === "success" ? "bg-green-600 text-white"
+          : toast.type === "error" ? "bg-red-600 text-white"
+          : "bg-gray-900 text-white"
+        }`}>
+          <span>{toast.type === "success" ? "✓" : toast.type === "error" ? "✕" : "ℹ"}</span>
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100">×</button>
+        </div>
+      )}
       {/* Top bar */}
       <div className="flex items-center justify-between mb-6">
         <div>
