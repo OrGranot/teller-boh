@@ -246,10 +246,10 @@ export default function DatePicker({
           {value ? fmtDisplay(value) : placeholder}
         </span>
         {!disabled && value && (
-          <button type="button" onClick={e => { e.stopPropagation(); onChange(""); }}
-            className="text-gray-300 hover:text-gray-500 transition-colors leading-none text-base">
+          <span role="button" onClick={e => { e.stopPropagation(); onChange(""); }}
+            className="text-gray-300 hover:text-gray-500 transition-colors leading-none text-base cursor-pointer">
             ×
-          </button>
+          </span>
         )}
       </button>
 
