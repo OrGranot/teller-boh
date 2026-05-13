@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/Sidebar";
 import MobileNavBar from "@/components/MobileNavBar";
 import NamePrompt from "@/components/NamePrompt";
+import InstallPWABanner from "@/components/InstallPWABanner";
 import type { AppContext } from "@/lib/types";
 import { ImportProvider } from "@/lib/import-context";
 
@@ -42,6 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <ImportProvider>
+      <InstallPWABanner />
       <div className="flex min-h-screen">
         {!ctx.profileName && <NamePrompt />}
         {/* Desktop sidebar — hidden on mobile */}
