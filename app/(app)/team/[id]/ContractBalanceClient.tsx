@@ -228,9 +228,7 @@ export default function ContractBalanceClient({
   const periodById = Object.fromEntries(periods.map(p => [p.contract.id, p]));
 
   // ── Accordion ──────────────────────────────────────────────────────────────
-  const [openIds, setOpenIds] = useState<Set<string>>(
-    () => new Set(initialContracts.length > 0 ? [initialContracts.reduce((a, b) => a.valid_from > b.valid_from ? a : b).id] : [])
-  );
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   function toggleOpen(id: string) {
     setOpenIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
