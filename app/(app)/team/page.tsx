@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { calcMultiContractBalance, type ContractPeriod } from "@/lib/hours-balance";
 import TeamTableClient, { type MemberRow, type PendingInvitation } from "./TeamTableClient";
 
@@ -16,6 +16,7 @@ export default async function TeamPage() {
   if (!me) return null;
 
   const { restaurantId } = { restaurantId: me.restaurant_id };
+  const admin = await createAdminClient();
 
   // ── Parallel fetches ──────────────────────────────────────────────────────
   const [
@@ -51,7 +52,8 @@ export default async function TeamPage() {
       .eq("restaurant_id", restaurantId),
 
     // Pending invitations (not yet accepted, not cancelled, not expired)
-    supabase
+    // Uses admin client to bypass RLS on the invitations table
+    admin
       .from("invitations")
       .select("id, email, name, status, expires_at, created_at, placeholder_profile_id")
       .eq("restaurant_id", restaurantId)
