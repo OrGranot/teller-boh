@@ -148,25 +148,29 @@ export default function ShiftsClient({
     setActiveShift(data as TimeRecord | null);
   }, [currentUserId, restaurantId]);
 
-  const loadActiveEmployees = useCallback(async () => {
-    if (!canViewAll) return;
-    const { data } = await supabase
-      .from("time_records")
-      .select("id, profile_id, clocked_in_at")
-      .eq("restaurant_id", restaurantId)
-      .eq("status", "active")
-      .order("clocked_in_at", { ascending: true });
-    setActiveEmployees((data as ActiveEmployee[]) || []);
-  }, [restaurantId, canViewAll]);
+  useEffect(() => { loadRecords(); loadActiveShift(); }, [loadRecords, loadActiveShift]);
 
+  // Separate effect for the owner "currently clocked in" panel — runs on mount
+  // and every 30s; also triggered manually via refreshActiveEmployees ref.
+  const refreshActiveEmployees = useRef<() => void>(() => {});
   useEffect(() => {
-    loadRecords();
-    loadActiveShift();
-    loadActiveEmployees();
-    // Refresh active employees every 60s so the list stays current
-    const id = setInterval(loadActiveEmployees, 60_000);
+    if (!canViewAll) return;
+    async function fetch() {
+      const { data } = await supabase
+        .from("time_records")
+        .select("id, profile_id, clocked_in_at")
+        .eq("restaurant_id", restaurantId)
+        .eq("status", "active")
+        .order("clocked_in_at", { ascending: true });
+      console.log("[activeEmployees]", data);
+      setActiveEmployees((data as ActiveEmployee[]) || []);
+    }
+    refreshActiveEmployees.current = fetch;
+    fetch();
+    const id = setInterval(fetch, 30_000);
     return () => clearInterval(id);
-  }, [loadRecords, loadActiveShift, loadActiveEmployees]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleClock() {
     if (isCurrentUserDeactivated) return;
@@ -183,7 +187,7 @@ export default function ShiftsClient({
     }
     await loadActiveShift();
     await loadRecords();
-    await loadActiveEmployees();
+    refreshActiveEmployees.current();
     router.refresh();
     setClocking(false);
   }
