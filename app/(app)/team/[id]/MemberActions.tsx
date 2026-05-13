@@ -6,6 +6,7 @@ import DatePicker from "@/components/DatePicker";
 interface Props {
   profileId: string;
   contractEnd: string | null;
+  isPlaceholder?: boolean;
 }
 
 function todayISO() {
@@ -13,9 +14,25 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function MemberActions({ profileId, contractEnd }: Props) {
+export default function MemberActions({ profileId, contractEnd, isPlaceholder }: Props) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+    const res = await fetch(`/api/members/${profileId}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push("/team");
+    } else {
+      const data = await res.json();
+      setError(data.error || "Failed to delete employee");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
 
   const [deactivating, setDeactivating] = useState(false);
   const [endDate, setEndDate] = useState(todayISO());
@@ -97,6 +114,29 @@ export default function MemberActions({ profileId, contractEnd }: Props) {
         >
           Deactivate
         </button>
+      )}
+
+      {isPlaceholder && (
+        confirmDelete ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Delete permanently?</span>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Yes, delete"}
+            </button>
+            <button onClick={() => setConfirmDelete(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-xs text-gray-400 hover:text-red-500 font-semibold transition-colors"
+          >
+            Delete employee
+          </button>
+        )
       )}
 
       {error && <p className="text-xs text-red-600">{error}</p>}

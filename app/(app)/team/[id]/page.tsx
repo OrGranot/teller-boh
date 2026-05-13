@@ -233,6 +233,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             <MemberActions
               profileId={id}
               contractEnd={member.contract_end ?? null}
+              isPlaceholder={profile?.is_placeholder ?? false}
             />
           </div>
         )}
