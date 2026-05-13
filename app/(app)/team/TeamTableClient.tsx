@@ -1,8 +1,9 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import ChecklistSelect from "@/components/ChecklistSelect";
 import DepartmentTags, { type Department } from "@/components/DepartmentTags";
+import { createClient } from "@/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,56 @@ export default function TeamTableClient({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [localAllDepts, setLocalAllDepts] = useState<Department[]>(allDepartments);
 
+  // ── Invite modal ──────────────────────────────────────────────────────────
+  const [showInvite,      setShowInvite]      = useState(false);
+  const [inviteName,      setInviteName]      = useState("");
+  const [inviteEmail,     setInviteEmail]     = useState("");
+  const [inviteDept,      setInviteDept]      = useState("");
+  const [inviteRole,      setInviteRole]      = useState("");
+  const [inviteHours,     setInviteHours]     = useState("");
+  const [inviteSalary,    setInviteSalary]    = useState("");
+  const [inviteStart,     setInviteStart]     = useState("");
+  const [showContract,    setShowContract]    = useState(false);
+  const [inviting,        setInviting]        = useState(false);
+  const [inviteError,     setInviteError]     = useState("");
+  const [inviteSuccess,   setInviteSuccess]   = useState("");
+  const [roles,           setRoles]           = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!showInvite || roles.length > 0) return;
+    createClient().from("roles").select("id, name").then(({ data }) => setRoles(data || []));
+  }, [showInvite]);
+
+  function resetInvite() {
+    setInviteName(""); setInviteEmail(""); setInviteDept(""); setInviteRole("");
+    setInviteHours(""); setInviteSalary(""); setInviteStart("");
+    setShowContract(false); setInviteError(""); setInviteSuccess("");
+  }
+
+  async function submitInvite() {
+    if (!inviteName.trim())  { setInviteError("Name is required.");  return; }
+    if (!inviteEmail.trim()) { setInviteError("Email is required."); return; }
+    setInviting(true); setInviteError("");
+    const res = await fetch("/api/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name:          inviteName.trim(),
+        email:         inviteEmail.trim(),
+        departmentId:  inviteDept   || undefined,
+        roleId:        inviteRole   || undefined,
+        hoursPerWeek:  inviteHours  ? Number(inviteHours)  : undefined,
+        salary:        inviteSalary ? Number(inviteSalary) : undefined,
+        contractStart: inviteStart  || undefined,
+      }),
+    });
+    const json = await res.json();
+    setInviting(false);
+    if (!res.ok) { setInviteError(json.error || "Failed to send invite."); return; }
+    setInviteSuccess(`Invite sent to ${inviteEmail.trim()} ✓`);
+    setTimeout(() => { setShowInvite(false); resetInvite(); }, 2000);
+  }
+
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
@@ -156,6 +207,102 @@ export default function TeamTableClient({
 
   return (
     <>
+      {/* ── Invite modal ─────────────────────────────────────────────────── */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-gray-900">Invite employee</h2>
+              <button onClick={() => { setShowInvite(false); resetInvite(); }} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+
+            {inviteSuccess ? (
+              <p className="text-green-600 font-semibold text-sm py-4 text-center">{inviteSuccess}</p>
+            ) : (
+              <>
+                {/* Required fields */}
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Full name <span className="text-red-400">*</span></label>
+                    <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+                      placeholder="Jane Smith" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Email <span className="text-red-400">*</span></label>
+                    <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+                      placeholder="jane@example.com" />
+                  </div>
+                </div>
+
+                {/* Contract details (optional) */}
+                <button onClick={() => setShowContract(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-gray-700 mb-3 transition-colors">
+                  <span className={`transition-transform duration-150 ${showContract ? "rotate-90" : ""}`}>›</span>
+                  Contract details <span className="font-normal text-gray-300">(optional)</span>
+                </button>
+
+                {showContract && (
+                  <div className="space-y-3 mb-4 pl-4 border-l-2 border-gray-100">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Department</label>
+                        <select value={inviteDept} onChange={e => setInviteDept(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400 bg-white">
+                          <option value="">—</option>
+                          {localAllDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Role</label>
+                        <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400 bg-white">
+                          <option value="">—</option>
+                          {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Hours / week</label>
+                        <input type="number" value={inviteHours} onChange={e => setInviteHours(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+                          placeholder="40" min={0} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Salary (€)</label>
+                        <input type="number" value={inviteSalary} onChange={e => setInviteSalary(e.target.value)}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+                          placeholder="2400" min={0} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Contract start</label>
+                      <input type="date" value={inviteStart} onChange={e => setInviteStart(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-gray-400" />
+                    </div>
+                  </div>
+                )}
+
+                {inviteError && <p className="text-red-500 text-xs mb-3">{inviteError}</p>}
+
+                <div className="flex gap-2 mt-2">
+                  <button onClick={submitInvite} disabled={inviting}
+                    className="flex-1 py-2.5 rounded-xl font-semibold text-sm bg-gray-900 hover:bg-gray-700 text-white transition-colors disabled:opacity-50">
+                    {inviting ? "Sending…" : "Send invite"}
+                  </button>
+                  <button onClick={() => { setShowInvite(false); resetInvite(); }}
+                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:border-gray-800 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="mb-4 flex items-center gap-2 sm:gap-3 flex-wrap">
         <ChecklistSelect
@@ -191,6 +338,12 @@ export default function TeamTableClient({
             ? `${visible.length} of ${members.length}`
             : `${members.length} member${members.length !== 1 ? "s" : ""}`}
         </span>
+        <button
+          onClick={() => setShowInvite(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-900 hover:bg-gray-700 text-white text-xs font-semibold transition-colors whitespace-nowrap"
+        >
+          + Invite employee
+        </button>
       </div>
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
