@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { calcMultiContractBalance, type ContractPeriod } from "@/lib/hours-balance";
-import TeamTableClient, { type MemberRow } from "./TeamTableClient";
+import TeamTableClient, { type MemberRow, type PendingInvitation } from "./TeamTableClient";
 
 export default async function TeamPage() {
   const supabase = await createClient();
@@ -23,6 +23,7 @@ export default async function TeamPage() {
     { data: allDepartments },
     { data: allDeptMembers },
     { data: allContracts },
+    { data: rawInvitations },
   ] = await Promise.all([
     supabase
       .from("restaurant_members")
@@ -48,6 +49,15 @@ export default async function TeamPage() {
       .from("member_contracts")
       .select("id, profile_id, valid_from, valid_until, hours_per_week, days_per_week, vacation_days_per_year, salary, sick_days")
       .eq("restaurant_id", restaurantId),
+
+    // Pending invitations (not yet accepted, not cancelled, not expired)
+    supabase
+      .from("invitations")
+      .select("id, email, name, status, expires_at, created_at, placeholder_profile_id")
+      .eq("restaurant_id", restaurantId)
+      .in("status", ["sent", "pending_approval", "approved"])
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false }),
   ]);
 
   // Group contracts by profile_id
@@ -159,6 +169,7 @@ export default async function TeamPage() {
         members={rows}
         allDepartments={allDepartments || []}
         serverToday={today}
+        pendingInvitations={(rawInvitations || []) as PendingInvitation[]}
       />
     </div>
   );

@@ -8,6 +8,16 @@ import { createClient } from "@/lib/supabase/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  name: string | null;
+  status: "sent" | "pending_approval" | "approved";
+  expires_at: string;
+  created_at: string;
+  placeholder_profile_id: string | null;
+}
+
 type SortKey = "name" | "role" | "salary" | "contract_start" | "balance";
 type SortDir = "asc" | "desc";
 type Status  = "active" | "imported" | "deactivated";
@@ -86,10 +96,12 @@ export default function TeamTableClient({
   members,
   allDepartments,
   serverToday,
+  pendingInvitations: initialPendingInvitations,
 }: {
   members: MemberRow[];
   allDepartments: Department[];
   serverToday: string;
+  pendingInvitations: PendingInvitation[];
 }) {
   const [nameFilter,   setNameFilter]   = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<Status[]>(["active", "imported"]);
@@ -97,6 +109,23 @@ export default function TeamTableClient({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [localAllDepts, setLocalAllDepts] = useState<Department[]>(allDepartments);
+
+  // ── Pending invitations ───────────────────────────────────────────────────
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>(initialPendingInvitations);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  async function cancelInvitation(id: string) {
+    setCancellingId(id);
+    const res = await fetch(`/api/invitations/${id}/cancel`, { method: "POST" });
+    setCancellingId(null);
+    if (res.ok) {
+      setPendingInvitations(prev => prev.filter(inv => inv.id !== id));
+    }
+  }
+
+  function daysUntilExpiry(expiresAt: string) {
+    return Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86_400_000);
+  }
 
   // ── Invite modal ──────────────────────────────────────────────────────────
   const [showInvite,      setShowInvite]      = useState(false);
@@ -345,6 +374,58 @@ export default function TeamTableClient({
           + Invite employee
         </button>
       </div>
+
+      {/* ── Pending invitations ──────────────────────────────────────────── */}
+      {pendingInvitations.length > 0 && (
+        <div className="mb-5">
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+            Pending invitations ({pendingInvitations.length})
+          </h2>
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+            {pendingInvitations.map((inv, i) => {
+              const days = daysUntilExpiry(inv.expires_at);
+              const initials = inv.name
+                ? inv.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+                : inv.email[0].toUpperCase();
+              return (
+                <div
+                  key={inv.id}
+                  className={`flex items-center gap-3 px-4 py-3 ${i < pendingInvitations.length - 1 ? "border-b border-gray-100" : ""}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 flex-shrink-0">
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {inv.name && <span className="text-sm font-semibold text-gray-800">{inv.name}</span>}
+                      <span className="text-sm text-gray-500 truncate">{inv.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        inv.status === "pending_approval"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-blue-50 text-blue-600"
+                      }`}>
+                        {inv.status === "pending_approval" ? "awaiting approval" : "invite sent"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        expires in {days}d
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => cancelInvitation(inv.id)}
+                    disabled={cancellingId === inv.id}
+                    className="text-xs font-semibold text-gray-400 hover:text-red-500 transition-colors disabled:opacity-40 whitespace-nowrap px-2 py-1 rounded-lg hover:bg-red-50"
+                  >
+                    {cancellingId === inv.id ? "Cancelling…" : "Cancel"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Table ────────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl overflow-x-auto" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
