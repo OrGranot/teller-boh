@@ -24,7 +24,6 @@ export default async function TeamPage() {
     { data: allDepartments },
     { data: allDeptMembers },
     { data: allContracts },
-    { data: rawInvitations },
   ] = await Promise.all([
     supabase
       .from("restaurant_members")
@@ -51,16 +50,15 @@ export default async function TeamPage() {
       .select("id, profile_id, valid_from, valid_until, hours_per_week, days_per_week, vacation_days_per_year, salary, sick_days")
       .eq("restaurant_id", restaurantId),
 
-    // Pending invitations (not yet accepted, not cancelled, not expired)
-    // Uses admin client to bypass RLS on the invitations table
-    admin
-      .from("invitations")
-      .select("id, email, name, status, expires_at, created_at, placeholder_profile_id")
-      .eq("restaurant_id", restaurantId)
-      .in("status", ["sent", "pending_approval", "approved"])
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false }),
   ]);
+
+  const { data: rawInvitations } = await admin
+    .from("invitations")
+    .select("id, email, name, status, expires_at, created_at, placeholder_profile_id")
+    .eq("restaurant_id", restaurantId)
+    .in("status", ["sent", "pending_approval", "approved"])
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
 
   // Group contracts by profile_id
   const contractsByProfile: Record<string, ContractPeriod[]> = {};

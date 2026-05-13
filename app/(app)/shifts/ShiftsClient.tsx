@@ -60,6 +60,7 @@ export default function ShiftsClient({
   const [activeShift,   setActiveShift]   = useState<TimeRecord | null>(null);
   const [showAddShift,  setShowAddShift]  = useState(false);
   const [activeEmployees, setActiveEmployees] = useState<ActiveEmployee[]>([]);
+  const [clockingOutId,  setClockingOutId]  = useState<string | null>(null);
 
   // Keep allDepartments in state so creating a new dept in any row updates all rows instantly
   // Stored as narrow {id,name} so onDepartmentCreated can append without type mismatch
@@ -162,7 +163,6 @@ export default function ShiftsClient({
         .eq("restaurant_id", restaurantId)
         .eq("status", "active")
         .order("clocked_in_at", { ascending: true });
-      console.log("[activeEmployees]", data);
       setActiveEmployees((data as ActiveEmployee[]) || []);
     }
     refreshActiveEmployees.current = fetch;
@@ -198,6 +198,19 @@ export default function ShiftsClient({
     await supabase.from("time_records")
       .update({ status: "approved", approved_by: currentUserId, approved_at: new Date().toISOString() })
       .in("id", ids);
+    loadRecords();
+    router.refresh();
+  }
+
+  async function handleClockOutEmployee(shiftId: string) {
+    setClockingOutId(shiftId);
+    await fetch(`/api/shifts/${shiftId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clocked_out_at: new Date().toISOString(), status: "pending" }),
+    });
+    setClockingOutId(null);
+    refreshActiveEmployees.current();
     loadRecords();
     router.refresh();
   }
@@ -280,22 +293,43 @@ export default function ShiftsClient({
               Currently clocked in — {activeEmployees.length}
             </span>
           </div>
-          <div className="divide-y divide-gray-50">
-            {activeEmployees.map(e => (
-              <div key={e.id} className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-sm font-medium text-gray-800">
-                  {profilesMap[e.profile_id] ?? "Unknown"}
-                </span>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span>since {formatTime(e.clocked_in_at)}</span>
-                  <LiveDuration
-                    since={e.clocked_in_at}
-                    className="font-bold tabular-nums text-gray-800 text-xs tracking-tight w-16 text-right"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Start time</th>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Duration</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {activeEmployees.map(e => (
+                <tr key={e.id}>
+                  <td className="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">
+                    {profilesMap[e.profile_id] ?? "Unknown"}
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-500 tabular-nums whitespace-nowrap">
+                    {formatTime(e.clocked_in_at)}
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <LiveDuration
+                      since={e.clocked_in_at}
+                      className="font-bold tabular-nums text-gray-800 text-xs tracking-tight"
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => handleClockOutEmployee(e.id)}
+                      disabled={clockingOutId === e.id}
+                      className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {clockingOutId === e.id ? "…" : "⏹ Clock out"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -363,6 +397,7 @@ export default function ShiftsClient({
         currentUserId={currentUserId}
         canEdit={canEdit && !importRunning}
         canApprove={canApprove}
+        hideClockOut
         profilesMap={canViewAll ? profilesMap : undefined}
         profileDeptMap={localDeptMap}
         allDepartments={allDepartments}
