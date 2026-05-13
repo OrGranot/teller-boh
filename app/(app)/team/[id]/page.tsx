@@ -9,6 +9,7 @@ import ContractBalanceClient from "./ContractBalanceClient";
 import DepartmentTags from "@/components/DepartmentTags";
 import RoleTag from "./RoleTag";
 import type { ContractPeriod } from "@/lib/hours-balance";
+import LiveDuration from "@/components/LiveDuration";
 
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -105,6 +106,15 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     salary:                c.salary != null ? Number(c.salary) : null,
     sick_days:             Number(c.sick_days ?? 0),
   }));
+
+  // Check if the employee is currently clocked in
+  const { data: activeShift } = await supabase
+    .from("time_records")
+    .select("clocked_in_at")
+    .eq("profile_id", id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
 
   // Find first and last shifts for navigation anchors
   const [{ data: latestShift }, { data: firstShift }] = await Promise.all([
@@ -227,6 +237,20 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           </div>
         )}
       </div>
+
+      {/* Active shift banner (owner view) */}
+      {activeShift && isOwner && (
+        <div className="mb-5 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-sm text-green-700 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block" />
+            Currently clocked in since {new Date(activeShift.clocked_in_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <LiveDuration
+            since={activeShift.clocked_in_at}
+            className="text-sm font-bold tabular-nums text-green-800 tracking-tight"
+          />
+        </div>
+      )}
 
       {/* Personal info */}
       <MemberInfoClient
