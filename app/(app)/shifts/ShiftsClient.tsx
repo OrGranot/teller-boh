@@ -9,7 +9,14 @@ import DateRangePicker, { DateRange } from "@/components/DateRangePicker";
 import ShiftTable, { ShiftRow } from "@/components/ShiftTable";
 import SearchableSelect from "@/components/SearchableSelect";
 import ChecklistSelect from "@/components/ChecklistSelect";
+import LiveDuration from "@/components/LiveDuration";
 import { useImport } from "@/lib/import-context";
+
+interface ActiveEmployee {
+  id: string;
+  profile_id: string;
+  clocked_in_at: string;
+}
 
 type EmployeeStatus = "active" | "imported" | "deactivated";
 interface TeamMember { profile_id: string; name: string | null; employeeStatus: EmployeeStatus; }
@@ -47,11 +54,12 @@ export default function ShiftsClient({
   const router   = useRouter();
   const { isRunning: importRunning } = useImport();
 
-  const [records,     setRecords]     = useState<ShiftRow[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [clocking,    setClocking]    = useState(false);
-  const [activeShift, setActiveShift] = useState<TimeRecord | null>(null);
-  const [showAddShift, setShowAddShift] = useState(false);
+  const [records,       setRecords]       = useState<ShiftRow[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [clocking,      setClocking]      = useState(false);
+  const [activeShift,   setActiveShift]   = useState<TimeRecord | null>(null);
+  const [showAddShift,  setShowAddShift]  = useState(false);
+  const [activeEmployees, setActiveEmployees] = useState<ActiveEmployee[]>([]);
 
   // Keep allDepartments in state so creating a new dept in any row updates all rows instantly
   // Stored as narrow {id,name} so onDepartmentCreated can append without type mismatch
@@ -140,7 +148,25 @@ export default function ShiftsClient({
     setActiveShift(data as TimeRecord | null);
   }, [currentUserId, restaurantId]);
 
-  useEffect(() => { loadRecords(); loadActiveShift(); }, [loadRecords, loadActiveShift]);
+  const loadActiveEmployees = useCallback(async () => {
+    if (!canViewAll) return;
+    const { data } = await supabase
+      .from("time_records")
+      .select("id, profile_id, clocked_in_at")
+      .eq("restaurant_id", restaurantId)
+      .eq("status", "active")
+      .order("clocked_in_at", { ascending: true });
+    setActiveEmployees((data as ActiveEmployee[]) || []);
+  }, [restaurantId, canViewAll]);
+
+  useEffect(() => {
+    loadRecords();
+    loadActiveShift();
+    loadActiveEmployees();
+    // Refresh active employees every 60s so the list stays current
+    const id = setInterval(loadActiveEmployees, 60_000);
+    return () => clearInterval(id);
+  }, [loadRecords, loadActiveShift, loadActiveEmployees]);
 
   async function handleClock() {
     if (isCurrentUserDeactivated) return;
@@ -157,6 +183,7 @@ export default function ShiftsClient({
     }
     await loadActiveShift();
     await loadRecords();
+    await loadActiveEmployees();
     router.refresh();
     setClocking(false);
   }
@@ -227,9 +254,44 @@ export default function ShiftsClient({
         </div>
       </div>
 
+      {/* My active shift banner */}
       {activeShift && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-700 mb-5">
-          🟢 Active shift started at {formatTime(activeShift.clocked_in_at)}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
+          <span className="text-sm text-blue-700 flex items-center gap-2">
+            🟢 Active shift started at {formatTime(activeShift.clocked_in_at)}
+          </span>
+          <LiveDuration
+            since={activeShift.clocked_in_at}
+            className="text-sm font-bold tabular-nums text-blue-800 tracking-tight"
+          />
+        </div>
+      )}
+
+      {/* Owner: currently clocked-in employees */}
+      {canViewAll && activeEmployees.length > 0 && (
+        <div className="mb-5 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Currently clocked in — {activeEmployees.length}
+            </span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeEmployees.map(e => (
+              <div key={e.id} className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm font-medium text-gray-800">
+                  {profilesMap[e.profile_id] ?? "Unknown"}
+                </span>
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <span>since {formatTime(e.clocked_in_at)}</span>
+                  <LiveDuration
+                    since={e.clocked_in_at}
+                    className="font-bold tabular-nums text-gray-800 text-xs tracking-tight w-16 text-right"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
