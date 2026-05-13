@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { maybeAutoDeletePlaceholder } from "@/lib/auto-delete-placeholder";
 
 async function getAuthorizedUser() {
   const supabase = await createClient();
@@ -54,8 +55,20 @@ export async function DELETE(
   const { user, admin } = await getAuthorizedUser();
   if (!user || !admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Grab profile_id + restaurant_id before deleting so we can run the cleanup check
+  const { data: shift } = await admin
+    .from("time_records")
+    .select("profile_id, restaurant_id")
+    .eq("id", id)
+    .single();
+
   const { error } = await admin.from("time_records").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Auto-delete placeholder if they now have no email and no shifts
+  if (shift) {
+    await maybeAutoDeletePlaceholder(admin, shift.profile_id, shift.restaurant_id);
+  }
 
   return NextResponse.json({ ok: true });
 }

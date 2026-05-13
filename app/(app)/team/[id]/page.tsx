@@ -182,11 +182,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
 
   // Auto-delete: placeholder with no email and no shifts → clean up and redirect
   if (isOwner && profile?.is_placeholder && !authEmail && (allShifts ?? []).length === 0) {
-    await admin.from("department_members").delete().eq("profile_id", id);
-    await admin.from("member_contracts").delete().eq("profile_id", id);
-    await admin.from("hours_adjustments").delete().eq("profile_id", id);
-    await admin.from("restaurant_members").delete().eq("profile_id", id).eq("restaurant_id", currentMember!.restaurant_id);
-    await admin.from("profiles").delete().eq("id", id);
+    const { maybeAutoDeletePlaceholder } = await import("@/lib/auto-delete-placeholder");
+    await maybeAutoDeletePlaceholder(admin, id, currentMember!.restaurant_id);
     redirect("/team");
   }
 

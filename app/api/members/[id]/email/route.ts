@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { Resend } from "resend";
+import { maybeAutoDeletePlaceholder } from "@/lib/auto-delete-placeholder";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -251,9 +252,6 @@ export async function DELETE(
     }
   } else {
     // ── Case 2: no auth account — just a pending invitation ─────────────────
-    // No auth user to delete; simply cancel any open invitations linked to
-    // this placeholder so the owner can re-invite with the same or a new email.
-    // Cancel + immediately expire so the token can never be used
     const { error: cancelErr } = await admin
       .from("invitations")
       .update({ status: "cancelled", expires_at: new Date().toISOString() })
@@ -264,5 +262,9 @@ export async function DELETE(
     if (cancelErr) return NextResponse.json({ error: cancelErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // After unlinking the email the profile is now a placeholder.
+  // If they also have no shifts, auto-delete them.
+  const deleted = await maybeAutoDeletePlaceholder(admin, id, caller.restaurant_id);
+
+  return NextResponse.json({ ok: true, deleted });
 }
