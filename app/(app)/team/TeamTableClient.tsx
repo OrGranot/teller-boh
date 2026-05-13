@@ -450,6 +450,8 @@ export default function TeamTableClient({
               <SortableHeader col="contract_start" label="Contract start" className="hidden lg:table-cell" />
               {/* Balance — always */}
               <SortableHeader col="balance" label="Balance" />
+              {/* Chevron — mobile only */}
+              <th className="lg:hidden px-3 py-3 w-6" />
               {/* View button — lg+ */}
               <th className="hidden lg:table-cell px-5 py-3" />
             </tr>
@@ -565,6 +567,11 @@ export default function TeamTableClient({
                         )}
                       </div>
                     )}
+                  </td>
+
+                  {/* Chevron — mobile only tap indicator */}
+                  <td className="lg:hidden px-3 py-3.5 w-6">
+                    <span className="text-gray-300 text-base">›</span>
                   </td>
 
                   {/* View button — lg+, hover-only on desktop */}

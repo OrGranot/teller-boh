@@ -54,7 +54,7 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
         className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 h-12 border-b border-white/10"
         style={{ background: "#1a1a1a" }}
       >
-        <span className="text-white font-bold tracking-tight">Teller BOH</span>
+        <span className="text-white font-bold tracking-tight">Teller Berlin</span>
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -87,7 +87,7 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
-            <span className="text-white font-bold text-base block">Teller BOH</span>
+            <span className="text-white font-bold text-base block">Teller Berlin</span>
             <span className="text-gray-400 text-xs truncate block mt-0.5">{ctx.restaurantName}</span>
           </div>
           <button

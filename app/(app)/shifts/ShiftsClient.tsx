@@ -335,9 +335,13 @@ export default function ShiftsClient({
 
       {/* Filters */}
       <div className="relative bg-white rounded-2xl border border-gray-100 px-4 sm:px-5 py-4 mb-4" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
-        <div className="flex flex-wrap gap-x-3 gap-y-3 items-end min-w-0">
+        {/* Date range — always full-width on mobile */}
+        <div className="mb-3 sm:mb-0">
           <DateRangePicker initialRange={dateRange} onChange={r => { dateRangeRef.current = r; setDateRange(r); loadRecords(); }} />
-          <div className="flex flex-wrap gap-2 items-center">
+        </div>
+        {/* Other filters — horizontal scroll strip on mobile, flex-wrap on desktop */}
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:mt-3">
+          <div className="flex gap-2 items-center min-w-max sm:flex-wrap sm:min-w-0">
             {canViewAll && (
               <ChecklistSelect
                 values={deptFilter}

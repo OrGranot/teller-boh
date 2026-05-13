@@ -223,8 +223,8 @@ export default function ShiftTable({
     return sum + h - (h > 6 ? 0.5 : 0);
   }, 0);
 
-  // Mobile column count: Date + [Employee] + Hours + Status + Expand chevron
-  const mobileColSpan = 3 + (showEmployee ? 1 : 0) + 1;
+  // Mobile column count: Date + [Employee] + Status + Expand chevron (Hours hidden on mobile)
+  const mobileColSpan = 2 + (showEmployee ? 1 : 0) + 1 + 1;
 
   // Helper — the clock-in / clock-out cell content (used in both main row and expand drawer)
   function ClockInCell({ s, editable }: { s: typeof sorted[0]; editable: boolean }) {
@@ -295,7 +295,7 @@ export default function ShiftTable({
             {/* Clock in / out — hidden on mobile */}
             <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">In</th>
             <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">Out</th>
-            <th className="text-left px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">Hours</th>
+            <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">Hours</th>
             {/* Department — hidden on mobile */}
             {showEmployee && <th className="hidden sm:table-cell text-left px-3 py-3 text-xs font-semibold text-gray-400 whitespace-nowrap">Dept</th>}
             <SortTh label="Status"   sortKey="status"   current={sortKey} dir={sortDir} onSort={toggleSort} className="whitespace-nowrap" />
@@ -344,8 +344,8 @@ export default function ShiftTable({
                     <ClockOutCell s={s} editable={editable} />
                   </td>
 
-                  {/* Hours — always */}
-                  <td className="px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
+                  {/* Hours — desktop only */}
+                  <td className="hidden sm:table-cell px-3 py-3 text-gray-600 text-xs whitespace-nowrap">
                     {isSaving ? <span className="text-gray-400">…</span> : calcHours(s.clocked_in_at, s.clocked_out_at)}
                   </td>
 
@@ -423,6 +423,12 @@ export default function ShiftTable({
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Clock out</p>
                           <ClockOutCell s={s} editable={editable} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Hours</p>
+                          <span className="text-xs text-gray-600 font-mono">
+                            {isSaving ? "…" : calcHours(s.clocked_in_at, s.clocked_out_at)}
+                          </span>
                         </div>
                         {showEmployee && (
                           <div className="col-span-2">
