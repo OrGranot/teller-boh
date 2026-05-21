@@ -28,14 +28,14 @@ export async function POST(req: NextRequest) {
   }
 
   await resend.emails.send({
-    from: "EasyBOH <hello@tellerberlin.com>",
+    from: "Teller Berlin <hello@tellerberlin.com>",
     to: email.trim(),
-    subject: "Reset your EasyBOH password",
+    subject: "Reset your Teller Berlin password",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
         <h2 style="margin-bottom:8px;">Reset your password</h2>
         <p style="color:#6b7280;">
-          We received a request to reset the password for your EasyBOH account.<br><br>
+          We received a request to reset the password for your Teller Berlin account.<br><br>
           Click the button below to choose a new password. This link expires in 1 hour.
         </p>
         <a href="${linkData.properties.action_link}"

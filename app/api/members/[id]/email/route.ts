@@ -117,15 +117,15 @@ export async function PATCH(
     const joinUrl = `${origin}/join/${inviteToken}`;
 
     await resend.emails.send({
-      from: "EasyBOH <hello@tellerberlin.com>",
+      from: "Teller Berlin <hello@tellerberlin.com>",
       to: normalizedEmail,
-      subject: `You've been invited to join ${restaurant?.name || "your restaurant"} on EasyBOH`,
+      subject: `You've been invited to join ${restaurant?.name || "your restaurant"} on Teller Berlin`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
-          <h2 style="margin-bottom:8px;">Welcome to EasyBOH</h2>
+          <h2 style="margin-bottom:8px;">Welcome to Teller Berlin</h2>
           <p style="color:#6b7280;">
             Hi ${profile?.name || "there"},<br><br>
-            Your manager has added you to <strong>${restaurant?.name || "the restaurant"}</strong> on EasyBOH.
+            Your manager has added you to <strong>${restaurant?.name || "the restaurant"}</strong> on Teller Berlin.
             Click below to set your password and access your account, including your shifts history.
           </p>
           <a href="${joinUrl}"
@@ -160,15 +160,15 @@ export async function PATCH(
 
   if (!linkErr && linkData) {
     await resend.emails.send({
-      from: "EasyBOH <hello@tellerberlin.com>",
+      from: "Teller Berlin <hello@tellerberlin.com>",
       to: normalizedEmail,
-      subject: `You've been added to ${restaurant?.name || "your restaurant"} on EasyBOH`,
+      subject: `You've been added to ${restaurant?.name || "your restaurant"} on Teller Berlin`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
-          <h2>Welcome to EasyBOH</h2>
+          <h2>Welcome to Teller Berlin</h2>
           <p style="color:#6b7280;">
             Hi ${profile?.name || "there"},<br><br>
-            Your manager has added you to <strong>${restaurant?.name || "the restaurant"}</strong> on EasyBOH.
+            Your manager has added you to <strong>${restaurant?.name || "the restaurant"}</strong> on Teller Berlin.
             Click below to access your account and view your shifts.
           </p>
           <a href="${linkData.properties?.action_link}"

@@ -29,7 +29,7 @@ function LoginForm() {
 
   return (
     <div className="bg-white rounded-2xl w-full max-w-sm p-10" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.08)" }}>
-      <h1 className="text-2xl font-bold mb-1">EasyBOH</h1>
+      <h1 className="text-2xl font-bold mb-1">Teller Berlin</h1>
       <p className="text-sm text-gray-400 mb-8">Sign in to your account</p>
 
       {error && (
@@ -60,7 +60,7 @@ function LoginForm() {
         </Link>
       </p>
       <p className="text-xs text-center text-gray-400 mt-3">
-        New to EasyBOH?{" "}
+        New to Teller Berlin?{" "}
         <Link href="/register" className="text-gray-900 font-semibold hover:underline">Create an account</Link>
       </p>
     </div>

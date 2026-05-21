@@ -118,15 +118,15 @@ export async function sendInvitationEmail(
   const restaurantName = restaurant?.name || "your restaurant";
 
   await resend.emails.send({
-    from: "EasyBOH <hello@tellerberlin.com>",
+    from: "Teller Berlin <hello@tellerberlin.com>",
     to: invitation.email,
-    subject: `You've been invited to join ${restaurantName} on EasyBOH`,
+    subject: `You've been invited to join ${restaurantName} on Teller Berlin`,
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
         <h2 style="margin-bottom: 8px;">You're invited! 🎉</h2>
         <p style="color: #6b7280;">
           ${invitation.name ? `Hi ${invitation.name},` : "Hi,"}<br><br>
-          You've been invited to join <strong>${restaurantName}</strong> on EasyBOH —
+          You've been invited to join <strong>${restaurantName}</strong> on Teller Berlin —
           a restaurant management app where you can track your shifts and working hours.
         </p>
         <a href="${joinUrl}"

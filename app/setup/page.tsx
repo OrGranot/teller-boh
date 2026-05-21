@@ -43,7 +43,7 @@ export default function SetupPage() {
     <div className="min-h-full flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">EasyBOH</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Teller Berlin</h1>
           <p className="text-sm text-gray-500 mt-1">Let's set up your restaurant</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

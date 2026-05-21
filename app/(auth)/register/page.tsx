@@ -24,7 +24,7 @@ export default function RegisterPage() {
 
   return (
     <div className="bg-white rounded-2xl w-full max-w-sm p-10" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.08)" }}>
-      <h1 className="text-2xl font-bold mb-1">EasyBOH</h1>
+      <h1 className="text-2xl font-bold mb-1">Teller Berlin</h1>
       <p className="text-sm text-gray-400 mb-8">Create your account</p>
 
       {error && (

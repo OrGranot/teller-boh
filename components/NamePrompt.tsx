@@ -29,7 +29,7 @@ export default function NamePrompt() {
       <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl">
         <h2 className="text-lg font-bold text-gray-900 mb-1">What's your name?</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Every team member needs a name before using EasyBOH.
+          Every team member needs a name before using Teller Berlin.
         </p>
         <input
           autoFocus
