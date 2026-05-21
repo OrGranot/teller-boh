@@ -54,7 +54,12 @@ function LoginForm() {
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="text-xs text-center text-gray-400 mt-6">
+      <p className="text-xs text-center text-gray-400 mt-4">
+        <Link href="/forgot-password" className="text-gray-500 hover:text-gray-900 hover:underline transition-colors">
+          Forgot password?
+        </Link>
+      </p>
+      <p className="text-xs text-center text-gray-400 mt-3">
         New to EasyBOH?{" "}
         <Link href="/register" className="text-gray-900 font-semibold hover:underline">Create an account</Link>
       </p>

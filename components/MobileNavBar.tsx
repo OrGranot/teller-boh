@@ -28,11 +28,12 @@ const navItems: MobileNavItem[] = [
 ];
 
 export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
-  const [open, setOpen] = useState(false);
+  const [open,         setOpen]         = useState(false);
+  const [pwResetState, setPwResetState] = useState<"idle" | "sending" | "sent">("idle");
   const pathname = usePathname();
-  const router = useRouter();
-  const perms  = ctx.role.permissions as Record<string, boolean>;
-  const isOwner = ctx.role.is_owner;
+  const router   = useRouter();
+  const perms    = ctx.role.permissions as Record<string, boolean>;
+  const isOwner  = ctx.role.is_owner;
 
   const visibleNav = navItems.filter(item => {
     if (isOwner) return true;
@@ -48,6 +49,20 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  async function sendPasswordReset() {
+    setPwResetState("sending");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) { setPwResetState("idle"); return; }
+    await fetch("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: user.email }),
+    });
+    setPwResetState("sent");
+    setTimeout(() => setPwResetState("idle"), 4000);
   }
 
   return (
@@ -155,6 +170,15 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
             </div>
             <div className="text-gray-500 text-xs mt-0.5">{ctx.role.name}</div>
           </div>
+          <button
+            type="button"
+            onClick={sendPasswordReset}
+            disabled={pwResetState !== "idle"}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/8 w-full transition-colors disabled:opacity-60"
+          >
+            <span className="w-5 text-center">🔑</span>
+            {pwResetState === "sent" ? "Email sent ✓" : pwResetState === "sending" ? "Sending…" : "Change password"}
+          </button>
           <button
             type="button"
             onClick={signOut}

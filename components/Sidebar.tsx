@@ -100,9 +100,10 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
     }
     return init;
   });
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput,   setNameInput]   = useState(ctx.profileName || "");
-  const [savingName,  setSavingName]  = useState(false);
+  const [editingName,  setEditingName]  = useState(false);
+  const [nameInput,    setNameInput]    = useState(ctx.profileName || "");
+  const [savingName,   setSavingName]   = useState(false);
+  const [pwResetState, setPwResetState] = useState<"idle" | "sending" | "sent">("idle");
 
   const perms   = ctx.role.permissions as Record<string, boolean>;
   const isOwner = ctx.role.is_owner;
@@ -119,6 +120,20 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
+  }
+
+  async function sendPasswordReset() {
+    setPwResetState("sending");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) { setPwResetState("idle"); return; }
+    await fetch("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: user.email }),
+    });
+    setPwResetState("sent");
+    setTimeout(() => setPwResetState("idle"), 4000);
   }
 
   async function saveName() {
@@ -308,6 +323,14 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
             </div>
           </button>
         )}
+        <button
+          onClick={sendPasswordReset}
+          disabled={pwResetState !== "idle"}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/8 w-full transition-colors disabled:opacity-60"
+        >
+          <span className="text-base w-5 text-center">🔑</span>
+          {pwResetState === "sent" ? "Email sent ✓" : pwResetState === "sending" ? "Sending…" : "Change password"}
+        </button>
         <button
           onClick={signOut}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/8 w-full transition-colors"
