@@ -113,7 +113,7 @@ export async function PATCH(
     }
 
     // Send invitation email
-    const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const origin = new URL(req.url).origin;
     const joinUrl = `${origin}/join/${inviteToken}`;
 
     await resend.emails.send({
@@ -151,7 +151,7 @@ export async function PATCH(
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
   // Generate a magic link so they can log in
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const origin = new URL(req.url).origin;
   const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: normalizedEmail,

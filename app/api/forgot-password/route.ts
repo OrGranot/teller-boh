@@ -10,7 +10,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  // Use the request's own origin so this works in every environment
+  // (local dev, staging, production) without any env-var config.
+  const origin = new URL(req.url).origin;
   const admin = await createAdminClient();
 
   // Generate a recovery link via the admin API so we can send it via Resend
