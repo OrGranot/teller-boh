@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
       tip_percent: tipPct,
       lang: invoice.lang,
       total,
+      notes: invoice.notes?.trim() || null,
     };
 
     let savedInvoiceId = invoice.id;

@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
           tip_percent: tipPct,
           lang: invoice.lang,
           total,
+          notes: invoice.notes?.trim() || null,
           status: invoice.status === "paid" ? "paid" : "sent",
           updated_at: new Date().toISOString(),
         })
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
           tip_percent: tipPct,
           lang: invoice.lang,
           total,
+          notes: invoice.notes?.trim() || null,
           status: invoice.status === "paid" ? "paid" : "sent",
           restaurant_id: restaurantId,
         })
