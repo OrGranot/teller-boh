@@ -1,20 +1,13 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { getCachedMember } from "@/lib/auth-cache";
 import { calcMultiContractBalance, type ContractPeriod } from "@/lib/hours-balance";
 import TeamTableClient, { type MemberRow, type PendingInvitation } from "./TeamTableClient";
 
 export default async function TeamPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: me } = await supabase
-    .from("restaurant_members")
-    .select("restaurant_id")
-    .eq("profile_id", user.id)
-    .single();
-
+  const me = await getCachedMember();
   if (!me) return null;
 
+  const supabase = await createClient();
   const { restaurantId } = { restaurantId: me.restaurant_id };
   const admin = await createAdminClient();
 

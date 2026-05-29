@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCachedMember } from "@/lib/auth-cache";
 import InvoiceForm from "@/components/InvoiceForm";
 import type { Invoice, InvoiceItem } from "@/lib/types";
 import Link from "next/link";
@@ -12,18 +13,7 @@ export default async function EditInvoicePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: member } = await supabase
-    .from("restaurant_members")
-    .select("restaurant_id, role:roles(is_owner, permissions)")
-    .eq("profile_id", user.id)
-    .single();
+  const member = await getCachedMember();
   if (!member) redirect("/setup");
 
   const role = member.role as unknown as {
@@ -35,6 +25,7 @@ export default async function EditInvoicePage({
   if (!canManageInvoices) redirect("/shifts");
 
   const restaurantId = member.restaurant_id;
+  const supabase = await createClient();
 
   const [{ data: inv }, { data: lineItems }] = await Promise.all([
     supabase

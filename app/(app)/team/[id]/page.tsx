@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCachedUser, getCachedMember } from "@/lib/auth-cache";
 import Link from "next/link";
 import MemberActions from "./MemberActions";
 import MemberInfoClient from "./MemberInfoClient";
@@ -15,17 +16,15 @@ import ActiveShiftBanner from "./ActiveShiftBanner";
 
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Use cached auth — layout already fetched these this request
+  const [user, currentMember] = await Promise.all([getCachedUser(), getCachedMember()]);
+  if (!user || !currentMember) redirect("/login");
+
   const supabase = await createClient();
   const admin = await createAdminClient();
 
-  // Get current user + their role
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: currentMember } = await supabase
-    .from("restaurant_members")
-    .select("restaurant_id, role:roles(is_owner)")
-    .eq("profile_id", user!.id)
-    .single();
-  const currentRole = currentMember?.role as unknown as { is_owner: boolean } | null;
+  const currentRole = currentMember.role as unknown as { is_owner: boolean } | null;
   const isOwner = !!currentRole?.is_owner;
 
   const { data: member } = await supabase

@@ -1,18 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { getCachedUser, getCachedMember } from "@/lib/auth-cache";
 import ShiftsClient from "./ShiftsClient";
 
 export default async function ShiftsPage() {
+  const [user, member] = await Promise.all([getCachedUser(), getCachedMember()]);
+  if (!user || !member) return null;
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: member } = await supabase
-    .from("restaurant_members")
-    .select("restaurant_id, contract_end, role:roles(is_owner, permissions)")
-    .eq("profile_id", user.id)
-    .single();
-
-  if (!member) return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const isCurrentUserDeactivated = !!(member.contract_end && (member.contract_end as string) <= today);

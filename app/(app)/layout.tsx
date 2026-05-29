@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCachedUser, getCachedMember } from "@/lib/auth-cache";
 import Sidebar from "@/components/Sidebar";
 import MobileNavBar from "@/components/MobileNavBar";
 import NamePrompt from "@/components/NamePrompt";
@@ -8,28 +9,22 @@ import type { AppContext } from "@/lib/types";
 import { ImportProvider } from "@/lib/import-context";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
+  const user = await getCachedUser();
   if (!user) redirect("/login");
 
-  const { data: member } = await supabase
-    .from("restaurant_members")
-    .select("*, role:roles(*), restaurant:restaurants(name)")
-    .eq("profile_id", user.id)
-    .limit(1)
-    .single();
+  // member + profile run in parallel; getCachedMember is warm for pages below
+  const supabase = await createClient();
+  const [member, profileResult] = await Promise.all([
+    getCachedMember(),
+    supabase.from("profiles").select("name").eq("id", user.id).single(),
+  ]);
 
   if (!member) redirect("/setup");
 
   const today = new Date().toISOString().slice(0, 10);
   const isDeactivated = !!(member.contract_end && member.contract_end <= today);
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name")
-    .eq("id", user.id)
-    .single();
+  const profile = profileResult.data;
 
   const ctx: AppContext = {
     restaurantId: member.restaurant_id,
