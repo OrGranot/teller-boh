@@ -109,8 +109,8 @@ export default function EmployeeBalanceCard({ userId, restaurantId }: Props) {
         {total.vacationAccrued != null && (
           <span><span className="font-medium text-gray-700">{fmt(total.vacationAccrued)}d</span> vacation</span>
         )}
-        {total.holidayCount > 0 && (
-          <span><span className="font-medium text-gray-700">{total.holidayCount}d</span> public holidays</span>
+        {total.holidayCountRaw > 0 && (
+          <span><span className="font-medium text-gray-700">{total.holidayCountRaw}d</span> public holidays</span>
         )}
         {total.paidOutHours > 0 && (
           <span><span className="font-medium text-red-500">−{fmt(total.paidOutHours)}h</span> paid out</span>

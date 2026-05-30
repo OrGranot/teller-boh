@@ -8,7 +8,7 @@
  * maintaining two copies.
  */
 
-import { countBerlinHolidaysInRange } from "@/lib/berlin-holidays";
+import { countBerlinHolidaysInRange, countBerlinHolidaysRaw } from "@/lib/berlin-holidays";
 
 export interface HoursAdjustment {
   id:              string;
@@ -38,7 +38,10 @@ export interface BalanceResult {
   vacationAccrued:  number | null;
   vacationCredit:   number;
   sickCredit:       number;
+  /** Weighted holiday entitlement (raw count × daysPerWeek/7) — used in the balance formula */
   holidayCount:     number;
+  /** Raw integer count of public holidays in the period — for display only */
+  holidayCountRaw:  number;
   holidayCredit:    number;
   paidOutHours:     number;
 }
@@ -84,7 +87,8 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
 
   const workedHours   = calcWorkedHours(shiftsToCount);
   const expectedHours = (periodDays / 7) * hoursPerWeek;
-  const holidayCount  = countBerlinHolidaysInRange(periodStart, periodEnd, daysPerWeek ?? 5);
+  const holidayCount    = countBerlinHolidaysInRange(periodStart, periodEnd, daysPerWeek ?? 5);
+  const holidayCountRaw = countBerlinHolidaysRaw(periodStart, periodEnd);
 
   const vacationAccrued =
     vacationDaysPerYear != null
@@ -116,6 +120,7 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
     vacationCredit,
     sickCredit,
     holidayCount,
+    holidayCountRaw,
     holidayCredit,
     paidOutHours,
   };
@@ -155,7 +160,7 @@ function addDays(iso: string, n: number): string {
 const ZERO_RESULT: BalanceResult = {
   balance: 0, workedHours: 0, expectedHours: 0, periodDays: 0,
   dailyHours: 0, vacationAccrued: 0, vacationCredit: 0,
-  sickCredit: 0, holidayCount: 0, holidayCredit: 0, paidOutHours: 0,
+  sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, paidOutHours: 0,
 };
 
 /**
@@ -254,9 +259,10 @@ export function calcMultiContractBalance(
       vacationAccrued:
         allNullVacation ? null : (acc.vacationAccrued ?? 0) + (r.vacationAccrued ?? 0),
       vacationCredit: acc.vacationCredit + r.vacationCredit,
-      sickCredit:     acc.sickCredit    + r.sickCredit,
-      holidayCount:   acc.holidayCount  + r.holidayCount,
-      holidayCredit:  acc.holidayCredit + r.holidayCredit,
+      sickCredit:      acc.sickCredit     + r.sickCredit,
+      holidayCount:    acc.holidayCount   + r.holidayCount,
+      holidayCountRaw: acc.holidayCountRaw + r.holidayCountRaw,
+      holidayCredit:   acc.holidayCredit  + r.holidayCredit,
       paidOutHours:   acc.paidOutHours  + r.paidOutHours,
     }),
     { ...ZERO_RESULT, vacationAccrued: allNullVacation ? null : 0 }
