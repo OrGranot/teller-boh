@@ -10,6 +10,7 @@ import ShiftTable, { ShiftRow } from "@/components/ShiftTable";
 import SearchableSelect from "@/components/SearchableSelect";
 import ChecklistSelect from "@/components/ChecklistSelect";
 import LiveDuration from "@/components/LiveDuration";
+import EmployeeBalanceCard from "@/components/EmployeeBalanceCard";
 import { useImport } from "@/lib/import-context";
 
 interface ActiveEmployee {
@@ -264,6 +265,11 @@ export default function ShiftsClient({
           )}
         </div>
       </div>
+
+      {/* Employee: balance summary card (not shown to managers/owners who see all shifts) */}
+      {!canViewAll && (
+        <EmployeeBalanceCard userId={currentUserId} restaurantId={restaurantId} />
+      )}
 
       {/* My active shift banner */}
       {activeShift && (

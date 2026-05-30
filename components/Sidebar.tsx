@@ -180,17 +180,6 @@ export default function Sidebar({ ctx }: { ctx: AppContext }) {
               <span className="text-sm w-5 text-center flex-shrink-0">⏱</span>
               <span className="font-medium">Shifts</span>
             </Link>
-            <Link
-              href={`/team/${ctx.profileId}`}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                pathname.startsWith("/team")
-                  ? "bg-white/15 text-white font-semibold"
-                  : "text-gray-400 hover:text-white hover:bg-white/8"
-              }`}
-            >
-              <span className="text-sm w-5 text-center flex-shrink-0">📊</span>
-              <span className="font-medium">My Balance</span>
-            </Link>
           </div>
         ) : (
 
