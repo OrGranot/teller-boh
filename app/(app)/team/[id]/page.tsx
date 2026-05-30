@@ -27,6 +27,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const currentRole = currentMember.role as unknown as { is_owner: boolean } | null;
   const isOwner = !!currentRole?.is_owner;
 
+  // Non-owners can only view their own profile
+  if (!isOwner && id !== user.id) redirect("/shifts");
+
   const { data: member } = await supabase
     .from("restaurant_members")
     .select("id, profile_id, restaurant_id, role_id, contract_start, contract_end, created_at, profile:profiles(name, phone, address, birthdate, is_placeholder), role:roles(id, name, is_owner, permissions)")

@@ -23,6 +23,10 @@ interface Props {
   currentUserId: string;
   canEdit: boolean;
   canApprove?: boolean;
+  /** Number of pending shifts — shown in the Approve all button */
+  pendingCount?: number;
+  /** Called when Approve all is clicked */
+  onApproveAll?: () => void;
   /** Pass to show employee name column and link each row to their profile page */
   profilesMap?: Record<string, string>;
   /** Employee department memberships per profile, shown in the Department column */
@@ -109,7 +113,8 @@ function SortTh({ label, sortKey, current, dir, onSort, className = "" }: {
 
 // ── Component ─────────────────────────────────────────────────
 export default function ShiftTable({
-  shifts, loading, currentUserId, canEdit, canApprove = false, profilesMap, profileDeptMap, allDepartments = [],
+  shifts, loading, currentUserId, canEdit, canApprove = false, pendingCount, onApproveAll,
+  profilesMap, profileDeptMap, allDepartments = [],
   onDepartmentCreated, onDepartmentToggled, onDepartmentDeleted, onRefresh, hideClockOut = false,
 }: Props) {
   const supabase = createClient();
@@ -284,6 +289,14 @@ export default function ShiftTable({
             </div>
           </span>
         </span>
+        {canApprove && onApproveAll && (pendingCount ?? 0) > 0 && (
+          <button
+            onClick={onApproveAll}
+            className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors whitespace-nowrap"
+          >
+            Approve all ({pendingCount})
+          </button>
+        )}
       </div>
 
       {/* Table — no internal scroll; columns collapse on narrow screens */}
@@ -324,7 +337,24 @@ export default function ShiftTable({
                 {/* ── Main row ── */}
                 <tr className={`group transition-colors hover:bg-gray-50 ${!isLast || isExpanded ? "border-b border-gray-100" : ""}`}>
 
-                  <td className="px-4 sm:px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{formatDate(s.clocked_in_at)}</td>
+                  <td className="px-4 sm:px-5 py-3 text-xs whitespace-nowrap">
+                    <span className="text-gray-500">{formatDate(s.clocked_in_at)}</span>
+                    {/* Mobile: show start → end · hrs inline so admins can approve without expanding */}
+                    <span className="sm:hidden block text-[10px] text-gray-400 mt-0.5 font-mono">
+                      {formatTime(s.clocked_in_at)}
+                      {" → "}
+                      {s.clocked_out_at ? formatTime(s.clocked_out_at) : "active"}
+                      {s.clocked_out_at && (
+                        <span className="text-gray-300">{" · "}{
+                          (() => {
+                            const h = (new Date(s.clocked_out_at).getTime() - new Date(s.clocked_in_at).getTime()) / 3600000;
+                            const net = h > 6 ? h - 0.5 : h;
+                            return `${net.toFixed(1)}h`;
+                          })()
+                        }</span>
+                      )}
+                    </span>
+                  </td>
 
                   {showEmployee && (
                     <td className="px-3 py-3 font-semibold whitespace-nowrap">

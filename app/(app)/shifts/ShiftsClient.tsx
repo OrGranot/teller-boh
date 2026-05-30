@@ -247,12 +247,6 @@ export default function ShiftsClient({
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {canApprove && pendingCount > 0 && (
-            <button onClick={handleApproveAll}
-              className="px-3 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors whitespace-nowrap">
-              Approve all ({pendingCount})
-            </button>
-          )}
           {canEdit && (
             <button onClick={() => setShowAddShift(true)}
               className="px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors whitespace-nowrap">
@@ -401,6 +395,8 @@ export default function ShiftsClient({
         currentUserId={currentUserId}
         canEdit={canEdit && !importRunning}
         canApprove={canApprove}
+        pendingCount={pendingCount}
+        onApproveAll={canApprove && pendingCount > 0 ? handleApproveAll : undefined}
         hideClockOut
         profilesMap={canViewAll ? profilesMap : undefined}
         profileDeptMap={localDeptMap}

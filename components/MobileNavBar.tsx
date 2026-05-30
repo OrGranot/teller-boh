@@ -141,6 +141,18 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
                 <span className="text-base w-5 text-center">⏱</span>
                 Shifts
               </Link>
+              <Link
+                href={`/team/${ctx.profileId}`}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                  pathname.startsWith("/team")
+                    ? "bg-white/15 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-white/8"
+                }`}
+              >
+                <span className="text-base w-5 text-center">📊</span>
+                My Balance
+              </Link>
             </>
           ) : visibleNav.map(item => {
             const active = pathname.startsWith(item.href);
