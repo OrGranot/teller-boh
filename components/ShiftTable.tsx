@@ -153,6 +153,13 @@ export default function ShiftTable({
     else { setSortKey(key); setSortDir("asc"); }
   }
 
+  /** Notify HoursBalanceClient (and anything else listening) that a shift changed. */
+  function notifyShiftChanged(profileId: string) {
+    window.dispatchEvent(
+      new CustomEvent("easyboh:shift-changed", { detail: { profileId } })
+    );
+  }
+
   function startEdit(shiftId: string, field: "in" | "out") {
     if (!canEdit) return;
     const s = shifts.find(x => x.id === shiftId)!;
@@ -196,23 +203,29 @@ export default function ShiftTable({
       setSaveError(`${shiftId}:${field}`);
       setTimeout(() => setSaveError(null), 4000); return;
     }
+    notifyShiftChanged(s.profile_id);
     onRefresh();
   }
 
   async function handleApprove(id: string) {
+    const s = shifts.find(x => x.id === id);
     await supabase.from("time_records").update({
       status: "approved", approved_by: currentUserId, approved_at: new Date().toISOString(),
     }).eq("id", id);
+    if (s) notifyShiftChanged(s.profile_id);
     onRefresh();
   }
 
   async function handleDelete(id: string) {
+    const s = shifts.find(x => x.id === id);
     await fetch(`/api/shifts/${id}`, { method: "DELETE" });
     setDeleteConfirm(null);
+    if (s) notifyShiftChanged(s.profile_id);
     onRefresh();
   }
 
   async function handleClockOut(id: string) {
+    const s = shifts.find(x => x.id === id);
     setSaving(`${id}:clockout`);
     await fetch(`/api/shifts/${id}`, {
       method: "PATCH",
@@ -220,6 +233,7 @@ export default function ShiftTable({
       body: JSON.stringify({ clocked_out_at: new Date().toISOString(), status: "pending" }),
     });
     setSaving(null);
+    if (s) notifyShiftChanged(s.profile_id);
     onRefresh();
   }
 
