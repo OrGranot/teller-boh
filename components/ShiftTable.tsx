@@ -1,10 +1,11 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import TimeInput from "@/components/TimeInput";
 import { createClient } from "@/lib/supabase/client";
 import DepartmentTags from "@/components/DepartmentTags";
 import ConfirmModal from "@/components/ConfirmModal";
+import { getBerlinHolidayNameMap } from "@/lib/berlin-holidays";
 
 // ── Types ─────────────────────────────────────────────────────
 export interface ShiftRow {
@@ -119,6 +120,16 @@ export default function ShiftTable({
 }: Props) {
   const supabase = createClient();
   const showEmployee = !!profilesMap;
+
+  // Build holiday name map covering the years present in the current shifts list
+  const berlinFmt = useMemo(() => new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" }), []);
+  const holidayNameMap = useMemo(() => {
+    if (shifts.length === 0) return new Map<string, string>();
+    const years = shifts.map(s => new Date(s.clocked_in_at).getUTCFullYear());
+    const minY = Math.min(...years);
+    const maxY = Math.max(...years);
+    return getBerlinHolidayNameMap(minY, maxY);
+  }, [shifts]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // Editing
@@ -339,6 +350,15 @@ export default function ShiftTable({
 
                   <td className="px-4 sm:px-5 py-3 text-xs whitespace-nowrap">
                     <span className="text-gray-500">{formatDate(s.clocked_in_at)}</span>
+                    {/* Public holiday badge */}
+                    {(() => {
+                      const holidayName = holidayNameMap.get(berlinFmt.format(new Date(s.clocked_in_at)));
+                      return holidayName ? (
+                        <span className="block mt-0.5 text-[10px] font-semibold text-orange-600 bg-orange-50 rounded px-1.5 py-0.5 w-fit">
+                          {holidayName}
+                        </span>
+                      ) : null;
+                    })()}
                     {/* Mobile: show start → end · hrs inline so admins can approve without expanding */}
                     <span className="sm:hidden block text-[10px] text-gray-400 mt-0.5 font-mono">
                       {formatTime(s.clocked_in_at)}
