@@ -470,11 +470,8 @@ export default function ContractBalanceClient({
                 <span className="whitespace-nowrap">Vac: {fmt(total.vacationAccrued, 1)}d</span>
               )}
               <span className="whitespace-nowrap">Sick: {fmt(total.sickCredit)}h</span>
-              {total.holidayCountRaw > 0 && (
-                <span className="whitespace-nowrap">
-                  Holidays: {total.holidayCountRaw}
-                  {total.holidayCount > 0 && ` (${total.holidayCount} worked → +${fmt(total.holidayCredit)}h)`}
-                </span>
+              {total.holidayCount > 0 && (
+                <span className="whitespace-nowrap">Holidays: {total.holidayCount}d</span>
               )}
               {total.paidOutHours > 0 && <span className="whitespace-nowrap">Paid: −{fmt(total.paidOutHours)}h</span>}
             </div>
@@ -734,9 +731,7 @@ export default function ContractBalanceClient({
                               ? [{ label: "Vacation accrued", value: `${fmt(period.result.vacationAccrued)} days` }]
                               : []),
                             { label: "Sick days",       value: `${contract.sick_days} ${contract.sick_days === 1 ? "day" : "days"}` },
-                            { label: "Public holidays", value: period.result.holidayCountRaw === 0
-                                ? "—"
-                                : `${period.result.holidayCountRaw} in period${period.result.holidayCount > 0 ? `, ${period.result.holidayCount} worked (+${fmt(period.result.holidayCredit)} hrs)` : ""}` },
+                            { label: "Public holidays worked", value: period.result.holidayCount > 0 ? `${period.result.holidayCount} days` : "—" },
                             { label: "Daily hours",     value: `${fmt(contract.days_per_week ? Number(contract.hours_per_week) / Number(contract.days_per_week) : Number(contract.hours_per_week) / 5)} hrs/day` },
                             ...(period.result.paidOutHours > 0
                               ? [{ label: "Paid out", value: `−${fmt(period.result.paidOutHours)} hrs`, red: true }]

@@ -221,7 +221,7 @@ export default function HoursBalanceClient({
             )}
             <span>Sick: {fmt(total.sickCredit)}h</span>
             {total.holidayCount > 0 && (
-              <span>Holidays worked: {total.holidayCount}d → +{fmt(total.holidayCredit)}h</span>
+              <span>Holidays: {total.holidayCount}d</span>
             )}
             {total.paidOutHours > 0 && <span>Paid out: −{fmt(total.paidOutHours)}h</span>}
           </div>
@@ -300,14 +300,7 @@ export default function HoursBalanceClient({
                     <div>
                       <p className="text-xs text-gray-400">Public holidays</p>
                       <p className="font-medium tabular-nums">
-                        {r.holidayCountRaw > 0
-                          ? `${r.holidayCountRaw} in period${r.holidayCount > 0 ? `, ${r.holidayCount} worked` : ""}`
-                          : "—"}
-                        {r.holidayCount > 0 && (
-                          <span className="text-xs text-gray-400 font-normal ml-1">
-                            → +{fmt(r.holidayCredit)} hrs
-                          </span>
-                        )}
+                        {r.holidayCount > 0 ? `${r.holidayCount} days` : "—"}
                       </p>
                     </div>
                     <div>
