@@ -8,7 +8,7 @@
  * maintaining two copies.
  */
 
-import { countBerlinHolidaysInRange, countBerlinHolidaysRaw } from "@/lib/berlin-holidays";
+import { getBerlinHolidaySet, countBerlinHolidaysRaw } from "@/lib/berlin-holidays";
 
 export interface HoursAdjustment {
   id:              string;
@@ -87,8 +87,22 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
 
   const workedHours   = calcWorkedHours(shiftsToCount);
   const expectedHours = (periodDays / 7) * hoursPerWeek;
-  const holidayCount    = countBerlinHolidaysInRange(periodStart, periodEnd, daysPerWeek ?? 5);
+
+  // Check which completed shifts actually fall on a Berlin public holiday.
+  // Uses the Berlin local date of clock-in so overnight shifts are attributed
+  // to the correct day. A Set ensures one holiday day counts once even if the
+  // employee clocked multiple shifts that day.
+  const holidaySet      = getBerlinHolidaySet(periodStart, periodEnd);
   const holidayCountRaw = countBerlinHolidaysRaw(periodStart, periodEnd);
+  const berlinFmt       = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" });
+  const workedHolidayDates = new Set(
+    shiftsToCount
+      .filter(s => !!s.clocked_out_at)
+      .map(s => berlinFmt.format(new Date(s.clocked_in_at)))
+      .filter(d => holidaySet.has(d))
+  );
+  // Each holiday actually worked earns one full compensatory day (Freizeitausgleich).
+  const holidayCount = workedHolidayDates.size;
 
   const vacationAccrued =
     vacationDaysPerYear != null

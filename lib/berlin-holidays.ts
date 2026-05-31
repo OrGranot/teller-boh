@@ -61,37 +61,19 @@ export function getBerlinHolidayDatesInRange(start: Date, end: Date): string[] {
 }
 
 /**
- * Count Berlin public holidays in range, proportionally weighted by the
- * fraction of the week the employee is contracted to work (daysPerWeek / 7).
- *
- * For restaurant workers with rotating schedules we don't know which specific
- * days of the week are "their" days each week. The fraction represents the
- * probability that any given public holiday falls on a scheduled working day.
- * Example: an employee working 4 days/week has a 4/7 chance any holiday falls
- * on one of their days → they earn 4/7 of a day's credit per holiday.
- *
- * This is the standard German approximation for employees without fixed
- * weekday schedules (§2 EFZG). On average over a year it gives the correct
- * entitlement even if individual holidays may be over- or under-credited.
- *
- * Returns a fractional number of entitled holiday days.
- */
-export function countBerlinHolidaysInRange(
-  start: Date,
-  end: Date,
-  daysPerWeek: number = 5,
-): number {
-  const holidays = getBerlinHolidayDatesInRange(start, end);
-  const fraction = Math.min(daysPerWeek / 7, 1);
-  return holidays.length * fraction;
-}
-
-/**
- * Returns the raw integer count of Berlin public holidays in range,
- * with no entitlement weighting. Use for display only.
+ * Returns the count of Berlin public holidays in range as a plain integer.
+ * Use for display purposes.
  */
 export function countBerlinHolidaysRaw(start: Date, end: Date): number {
   return getBerlinHolidayDatesInRange(start, end).length;
+}
+
+/**
+ * Returns the set of Berlin public holiday dates (YYYY-MM-DD) in range.
+ * Use this for exact shift-vs-holiday comparison.
+ */
+export function getBerlinHolidaySet(start: Date, end: Date): Set<string> {
+  return new Set(getBerlinHolidayDatesInRange(start, end));
 }
 
 function offsetDate(date: Date, days: number): Date {

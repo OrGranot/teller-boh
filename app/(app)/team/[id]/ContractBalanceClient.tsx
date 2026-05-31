@@ -222,7 +222,7 @@ export default function ContractBalanceClient({
 
   const { periods, total } = dataReady && contracts.length > 0
     ? calcMultiContractBalance(contracts, untilDate, allShifts, adjustments)
-    : { periods: [], total: { balance: 0, workedHours: 0, expectedHours: 0, vacationAccrued: null as number | null, vacationCredit: 0, sickCredit: 0, holidayCount: 0, holidayCredit: 0, paidOutHours: 0, periodDays: 0, dailyHours: 0 } };
+    : { periods: [], total: { balance: 0, workedHours: 0, expectedHours: 0, vacationAccrued: null as number | null, vacationCredit: 0, sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, paidOutHours: 0, periodDays: 0, dailyHours: 0 } };
 
   // Map contract id → period result for quick lookup
   const periodById = Object.fromEntries(periods.map(p => [p.contract.id, p]));
@@ -470,7 +470,12 @@ export default function ContractBalanceClient({
                 <span className="whitespace-nowrap">Vac: {fmt(total.vacationAccrued, 1)}d</span>
               )}
               <span className="whitespace-nowrap">Sick: {fmt(total.sickCredit)}h</span>
-              <span className="whitespace-nowrap">Holidays: {total.holidayCountRaw}d → +{fmt(total.holidayCredit)}h</span>
+              {total.holidayCountRaw > 0 && (
+                <span className="whitespace-nowrap">
+                  Holidays: {total.holidayCountRaw}
+                  {total.holidayCount > 0 && ` (${total.holidayCount} worked → +${fmt(total.holidayCredit)}h)`}
+                </span>
+              )}
               {total.paidOutHours > 0 && <span className="whitespace-nowrap">Paid: −{fmt(total.paidOutHours)}h</span>}
             </div>
           )}
@@ -729,7 +734,9 @@ export default function ContractBalanceClient({
                               ? [{ label: "Vacation accrued", value: `${fmt(period.result.vacationAccrued)} days` }]
                               : []),
                             { label: "Sick days",       value: `${contract.sick_days} ${contract.sick_days === 1 ? "day" : "days"}` },
-                            { label: "Public holidays", value: `${period.result.holidayCountRaw} days → +${fmt(period.result.holidayCredit)} hrs` },
+                            { label: "Public holidays", value: period.result.holidayCountRaw === 0
+                                ? "—"
+                                : `${period.result.holidayCountRaw} in period${period.result.holidayCount > 0 ? `, ${period.result.holidayCount} worked (+${fmt(period.result.holidayCredit)} hrs)` : ""}` },
                             { label: "Daily hours",     value: `${fmt(contract.days_per_week ? Number(contract.hours_per_week) / Number(contract.days_per_week) : Number(contract.hours_per_week) / 5)} hrs/day` },
                             ...(period.result.paidOutHours > 0
                               ? [{ label: "Paid out", value: `−${fmt(period.result.paidOutHours)} hrs`, red: true }]
