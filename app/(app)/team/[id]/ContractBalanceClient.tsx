@@ -20,6 +20,36 @@ function fmt(n: number, dec = 1) { return n.toFixed(dec); }
 function fmtDate(iso: string)    { return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB"); }
 function sign(n: number)         { return n >= 0 ? "+" : ""; }
 
+function HolidayTooltip({
+  list,
+  children,
+}: {
+  list: { date: string; name: string }[];
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="relative group inline-flex items-center gap-1 cursor-help underline decoration-dotted underline-offset-2 decoration-gray-400">
+      {children}
+      <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[200px]">
+        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl">
+          <p className="font-semibold text-gray-300 mb-1.5">Public holidays worked</p>
+          <ul className="space-y-1">
+            {list.map(h => (
+              <li key={h.date} className="flex items-center gap-2 whitespace-nowrap">
+                <span className="tabular-nums text-gray-400">
+                  {new Date(h.date + "T12:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span>{h.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="border-[5px] border-transparent border-t-gray-900 ml-3" />
+      </div>
+    </span>
+  );
+}
+
 // ── Field types ───────────────────────────────────────────────────────────────
 
 type NumericField = "hours_per_week" | "days_per_week" | "vacation_days_per_year" | "salary" | "sick_days";
@@ -222,7 +252,7 @@ export default function ContractBalanceClient({
 
   const { periods, total } = dataReady && contracts.length > 0
     ? calcMultiContractBalance(contracts, untilDate, allShifts, adjustments)
-    : { periods: [], total: { balance: 0, workedHours: 0, expectedHours: 0, vacationAccrued: null as number | null, vacationCredit: 0, sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, paidOutHours: 0, periodDays: 0, dailyHours: 0 } };
+    : { periods: [], total: { balance: 0, workedHours: 0, expectedHours: 0, vacationAccrued: null as number | null, vacationCredit: 0, sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, workedHolidayList: [] as { date: string; name: string }[], paidOutHours: 0, periodDays: 0, dailyHours: 0 } };
 
   // Map contract id → period result for quick lookup
   const periodById = Object.fromEntries(periods.map(p => [p.contract.id, p]));
@@ -471,7 +501,9 @@ export default function ContractBalanceClient({
               )}
               <span className="whitespace-nowrap">Sick: {fmt(total.sickCredit)}h</span>
               {total.holidayCount > 0 && (
-                <span className="whitespace-nowrap">Holidays: {total.holidayCount}d</span>
+                <HolidayTooltip list={total.workedHolidayList}>
+                  Holidays: {total.holidayCount}d
+                </HolidayTooltip>
               )}
               {total.paidOutHours > 0 && <span className="whitespace-nowrap">Paid: −{fmt(total.paidOutHours)}h</span>}
             </div>
@@ -731,15 +763,19 @@ export default function ContractBalanceClient({
                               ? [{ label: "Vacation accrued", value: `${fmt(period.result.vacationAccrued)} days` }]
                               : []),
                             { label: "Sick days",       value: `${contract.sick_days} ${contract.sick_days === 1 ? "day" : "days"}` },
-                            { label: "Public holidays worked", value: period.result.holidayCount > 0 ? `${period.result.holidayCount} days` : "—" },
+                            { label: "Public holidays worked", value: period.result.holidayCount > 0 ? `${period.result.holidayCount} days` : "—", holidayList: period.result.workedHolidayList },
                             { label: "Daily hours",     value: `${fmt(contract.days_per_week ? Number(contract.hours_per_week) / Number(contract.days_per_week) : Number(contract.hours_per_week) / 5)} hrs/day` },
                             ...(period.result.paidOutHours > 0
                               ? [{ label: "Paid out", value: `−${fmt(period.result.paidOutHours)} hrs`, red: true }]
                               : []),
-                          ].map(({ label, value, red }) => (
+                          ].map(({ label, value, red, holidayList }) => (
                             <React.Fragment key={label}>
                               <span className="text-xs text-gray-400 whitespace-nowrap">{label}</span>
-                              <span className={`text-xs font-semibold tabular-nums whitespace-nowrap ${red ? "text-red-500" : "text-gray-700"}`}>{value}</span>
+                              <span className={`text-xs font-semibold tabular-nums whitespace-nowrap ${red ? "text-red-500" : "text-gray-700"}`}>
+                                {holidayList && holidayList.length > 0
+                                  ? <HolidayTooltip list={holidayList}>{value}</HolidayTooltip>
+                                  : value}
+                              </span>
                             </React.Fragment>
                           ))}
                         </div>

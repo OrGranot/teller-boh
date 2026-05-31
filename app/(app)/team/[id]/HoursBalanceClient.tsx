@@ -30,6 +30,36 @@ function fmtDate(iso: string) {
 
 function sign(n: number) { return n >= 0 ? "+" : ""; }
 
+function HolidayTooltip({
+  list,
+  children,
+}: {
+  list: { date: string; name: string }[];
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="relative group inline-flex items-center gap-1 cursor-help underline decoration-dotted underline-offset-2 decoration-gray-400">
+      {children}
+      <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[200px]">
+        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl">
+          <p className="font-semibold text-gray-300 mb-1.5">Public holidays worked</p>
+          <ul className="space-y-1">
+            {list.map(h => (
+              <li key={h.date} className="flex items-center gap-2 whitespace-nowrap">
+                <span className="tabular-nums text-gray-400">
+                  {new Date(h.date + "T12:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span>{h.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="border-[5px] border-transparent border-t-gray-900 ml-3" />
+      </div>
+    </span>
+  );
+}
+
 export default function HoursBalanceClient({
   profileId,
   canEdit,
@@ -221,7 +251,9 @@ export default function HoursBalanceClient({
             )}
             <span>Sick: {fmt(total.sickCredit)}h</span>
             {total.holidayCount > 0 && (
-              <span>Holidays: {total.holidayCount}d</span>
+              <HolidayTooltip list={total.workedHolidayList}>
+                Holidays: {total.holidayCount}d
+              </HolidayTooltip>
             )}
             {total.paidOutHours > 0 && <span>Paid out: −{fmt(total.paidOutHours)}h</span>}
           </div>
@@ -300,7 +332,9 @@ export default function HoursBalanceClient({
                     <div>
                       <p className="text-xs text-gray-400">Public holidays</p>
                       <p className="font-medium tabular-nums">
-                        {r.holidayCount > 0 ? `${r.holidayCount} days` : "—"}
+                        {r.holidayCount > 0
+                          ? <HolidayTooltip list={r.workedHolidayList}>{r.holidayCount} days</HolidayTooltip>
+                          : "—"}
                       </p>
                     </div>
                     <div>

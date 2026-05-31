@@ -76,6 +76,34 @@ export function getBerlinHolidaySet(start: Date, end: Date): Set<string> {
   return new Set(getBerlinHolidayDatesInRange(start, end));
 }
 
+/**
+ * Returns a Map of YYYY-MM-DD → holiday name for all Berlin public holidays
+ * in the given year range. Used to show human-readable names in tooltips.
+ */
+export function getBerlinHolidayNameMap(startYear: number, endYear: number): Map<string, string> {
+  const map = new Map<string, string>();
+  for (let y = startYear; y <= endYear; y++) {
+    const easter = easterSunday(y);
+    const fmt = (d: Date) => {
+      const mo = String(d.getMonth() + 1).padStart(2, "0");
+      const da = String(d.getDate()).padStart(2, "0");
+      return `${d.getFullYear()}-${mo}-${da}`;
+    };
+    const add = (d: Date, name: string) => map.set(fmt(d), name);
+    add(new Date(y, 0, 1),   "New Year's Day");
+    if (y >= 2019) add(new Date(y, 2, 8), "International Women's Day");
+    add(offsetDate(easter, -2),  "Good Friday");
+    add(offsetDate(easter, 1),   "Easter Monday");
+    add(new Date(y, 4, 1),   "Labour Day");
+    add(offsetDate(easter, 39),  "Ascension Day");
+    add(offsetDate(easter, 50),  "Whit Monday");
+    add(new Date(y, 9, 3),   "German Unity Day");
+    add(new Date(y, 11, 25), "Christmas Day");
+    add(new Date(y, 11, 26), "Boxing Day");
+  }
+  return map;
+}
+
 function offsetDate(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);

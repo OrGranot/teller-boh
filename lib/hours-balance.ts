@@ -8,7 +8,7 @@
  * maintaining two copies.
  */
 
-import { getBerlinHolidaySet, countBerlinHolidaysRaw } from "@/lib/berlin-holidays";
+import { getBerlinHolidaySet, countBerlinHolidaysRaw, getBerlinHolidayNameMap } from "@/lib/berlin-holidays";
 
 export interface HoursAdjustment {
   id:              string;
@@ -38,11 +38,13 @@ export interface BalanceResult {
   vacationAccrued:  number | null;
   vacationCredit:   number;
   sickCredit:       number;
-  /** Weighted holiday entitlement (raw count × daysPerWeek/7) — used in the balance formula */
+  /** Number of public holidays the employee actually worked — drives the credit */
   holidayCount:     number;
   /** Raw integer count of public holidays in the period — for display only */
   holidayCountRaw:  number;
   holidayCredit:    number;
+  /** Sorted list of holidays the employee actually worked, for tooltip display */
+  workedHolidayList: { date: string; name: string }[];
   paidOutHours:     number;
 }
 
@@ -95,14 +97,23 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
   const holidaySet      = getBerlinHolidaySet(periodStart, periodEnd);
   const holidayCountRaw = countBerlinHolidaysRaw(periodStart, periodEnd);
   const berlinFmt       = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" });
-  const workedHolidayDates = new Set(
+  const workedHolidayDateSet = new Set(
     shiftsToCount
       .filter(s => !!s.clocked_out_at)
       .map(s => berlinFmt.format(new Date(s.clocked_in_at)))
       .filter(d => holidaySet.has(d))
   );
   // Each holiday actually worked earns one full compensatory day (Freizeitausgleich).
-  const holidayCount = workedHolidayDates.size;
+  const holidayCount = workedHolidayDateSet.size;
+
+  // Build named list for tooltip display
+  const nameMap = getBerlinHolidayNameMap(
+    periodStart.getUTCFullYear(),
+    periodEnd.getUTCFullYear()
+  );
+  const workedHolidayList = [...workedHolidayDateSet]
+    .sort()
+    .map(date => ({ date, name: nameMap.get(date) ?? date }));
 
   const vacationAccrued =
     vacationDaysPerYear != null
@@ -136,6 +147,7 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
     holidayCount,
     holidayCountRaw,
     holidayCredit,
+    workedHolidayList,
     paidOutHours,
   };
 }
@@ -174,7 +186,8 @@ function addDays(iso: string, n: number): string {
 const ZERO_RESULT: BalanceResult = {
   balance: 0, workedHours: 0, expectedHours: 0, periodDays: 0,
   dailyHours: 0, vacationAccrued: 0, vacationCredit: 0,
-  sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, paidOutHours: 0,
+  sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0,
+  workedHolidayList: [], paidOutHours: 0,
 };
 
 /**
@@ -273,10 +286,12 @@ export function calcMultiContractBalance(
       vacationAccrued:
         allNullVacation ? null : (acc.vacationAccrued ?? 0) + (r.vacationAccrued ?? 0),
       vacationCredit: acc.vacationCredit + r.vacationCredit,
-      sickCredit:      acc.sickCredit     + r.sickCredit,
-      holidayCount:    acc.holidayCount   + r.holidayCount,
-      holidayCountRaw: acc.holidayCountRaw + r.holidayCountRaw,
-      holidayCredit:   acc.holidayCredit  + r.holidayCredit,
+      sickCredit:       acc.sickCredit      + r.sickCredit,
+      holidayCount:     acc.holidayCount    + r.holidayCount,
+      holidayCountRaw:  acc.holidayCountRaw + r.holidayCountRaw,
+      holidayCredit:    acc.holidayCredit   + r.holidayCredit,
+      workedHolidayList: [...acc.workedHolidayList, ...r.workedHolidayList]
+        .sort((a, b) => a.date.localeCompare(b.date)),
       paidOutHours:   acc.paidOutHours  + r.paidOutHours,
     }),
     { ...ZERO_RESULT, vacationAccrued: allNullVacation ? null : 0 }
