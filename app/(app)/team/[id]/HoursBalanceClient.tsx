@@ -40,7 +40,8 @@ function HolidayTooltip({
   return (
     <span className="relative group inline-flex items-center gap-1 cursor-help underline decoration-dotted underline-offset-2 decoration-gray-400">
       {children}
-      <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[200px]">
+      <div className="pointer-events-none absolute top-full left-0 mt-2 hidden group-hover:block z-50 min-w-[200px]">
+        <div className="border-[5px] border-transparent border-b-gray-900 ml-3" />
         <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl">
           <p className="font-semibold text-gray-300 mb-1.5">Public holidays worked</p>
           <ul className="space-y-1">
@@ -54,7 +55,6 @@ function HolidayTooltip({
             ))}
           </ul>
         </div>
-        <div className="border-[5px] border-transparent border-t-gray-900 ml-3" />
       </div>
     </span>
   );

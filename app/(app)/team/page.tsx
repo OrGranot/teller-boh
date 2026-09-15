@@ -1,11 +1,15 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { getCachedMember } from "@/lib/auth-cache";
 import { calcMultiContractBalance, type ContractPeriod } from "@/lib/hours-balance";
 import TeamTableClient, { type MemberRow, type PendingInvitation } from "./TeamTableClient";
 
 export default async function TeamPage() {
   const me = await getCachedMember();
-  if (!me) return null;
+  if (!me) redirect("/login");
+
+  const meRole = me.role as unknown as { is_owner: boolean; permissions: Record<string, boolean> } | null;
+  if (!meRole?.is_owner && !meRole?.permissions?.can_view_all_shifts) redirect("/shifts");
 
   const supabase = await createClient();
   const { restaurantId } = { restaurantId: me.restaurant_id };
@@ -24,6 +28,7 @@ export default async function TeamPage() {
         "id, profile_id, contract_end, created_at, profile:profile_id(name, is_placeholder), role:roles(name, is_owner)"
       )
       .eq("restaurant_id", restaurantId)
+      .eq("is_inspector", false)
       .order("created_at", { ascending: true }),
 
     supabase
@@ -83,7 +88,7 @@ export default async function TeamPage() {
 
   // ── Fetch shifts + adjustments per employee in parallel ────────────────────
   const balanceMembers = members.filter(m => (contractsByProfile[m.profile_id] ?? []).length > 0);
-  const shiftsByProfile:      Record<string, { clocked_in_at: string; clocked_out_at: string | null }[]> = {};
+  const shiftsByProfile:      Record<string, { clocked_in_at: string; clocked_out_at: string | null; status: string }[]> = {};
   const adjustmentsByProfile: Record<string, { id: string; hours: number; note: string | null; adjustment_date: string }[]> = {};
 
   await Promise.all(
@@ -91,7 +96,7 @@ export default async function TeamPage() {
       const [shiftsResult, adjResult] = await Promise.all([
         supabase
           .from("time_records")
-          .select("clocked_in_at, clocked_out_at")
+          .select("clocked_in_at, clocked_out_at, status")
           .eq("profile_id", m.profile_id),
         supabase
           .from("hours_adjustments")

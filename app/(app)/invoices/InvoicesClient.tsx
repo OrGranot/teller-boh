@@ -78,6 +78,38 @@ export default function InvoicesClient({ restaurantId }: Props) {
   const [pdfError, setPdfError] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  // Multi-select
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+
+  function toggleSelect(id: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    if (selected.size === filtered.length) setSelected(new Set());
+    else setSelected(new Set(filtered.map(i => i.id)));
+  }
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    const ids = [...selected];
+    await Promise.all(ids.map(id =>
+      supabase.from("invoices").delete().eq("id", id).eq("restaurant_id", restaurantId)
+    ));
+    setInvoices(prev => prev.filter(inv => !selected.has(inv.id)));
+    setSelected(new Set());
+    setBulkDeleting(false);
+    setBulkDeleteConfirm(false);
+  }
+  async function handleBulkStatus(status: "draft" | "sent" | "paid") {
+    const ids = [...selected];
+    await Promise.all(ids.map(id =>
+      supabase.from("invoices").update({ status }).eq("id", id).eq("restaurant_id", restaurantId)
+    ));
+    setInvoices(prev => prev.map(inv => selected.has(inv.id) ? { ...inv, status } : inv));
+    setSelected(new Set());
+  }
+
   async function handleDownload(inv: Invoice) {
     setDownloading(inv.id);
     try {
@@ -110,7 +142,7 @@ export default function InvoicesClient({ restaurantId }: Props) {
       const res = await fetch("/api/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoice }),
+        body: JSON.stringify({ invoice, skipSave: true }),
       });
 
       if (!res.ok) {
@@ -150,6 +182,8 @@ export default function InvoicesClient({ restaurantId }: Props) {
 
     return matchSearch && matchFilter && matchFrom && matchTo;
   });
+
+  const selectedTotal = filtered.filter(i => selected.has(i.id)).reduce((s, i) => s + Number(i.total), 0);
 
   const clearDates = () => {
     setDateFrom("");
@@ -243,11 +277,47 @@ export default function InvoicesClient({ restaurantId }: Props) {
         </div>
       ) : (
         <>
+          {/* ── Selection toolbar ───────────────────────────────────── */}
+          {selected.size > 0 && (
+            <div className="mb-3 flex items-center gap-4 bg-gray-900 text-white rounded-xl px-4 py-3">
+              <span className="text-sm font-semibold">
+                {selected.size} selected
+              </span>
+              <span className="text-sm text-gray-300">
+                Total: <span className="font-semibold text-white">{formatEuro(selectedTotal)}</span>
+              </span>
+              <div className="ml-auto flex gap-2 flex-wrap">
+                <button onClick={() => handleBulkStatus("draft")}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/10 text-gray-300 hover:text-white hover:bg-white/20 transition-colors cursor-pointer">
+                  Mark Draft
+                </button>
+                <button onClick={() => handleBulkStatus("sent")}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-500/80 text-white hover:bg-blue-500 transition-colors cursor-pointer">
+                  Mark Sent
+                </button>
+                <button onClick={() => handleBulkStatus("paid")}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer">
+                  Mark Paid
+                </button>
+                <button onClick={() => setSelected(new Set())}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer">
+                  Clear
+                </button>
+                <button onClick={() => setBulkDeleteConfirm(true)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer">
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Mobile card list ─────────────────────────────────────── */}
           <div className="sm:hidden flex flex-col gap-2">
             {filtered.map(inv => (
               <div key={inv.id} className="bg-white rounded-2xl px-4 py-3.5" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
                 <div className="flex items-start justify-between gap-2 mb-1">
+                  <input type="checkbox" checked={selected.has(inv.id)}
+                    onChange={() => toggleSelect(inv.id)} className="w-3.5 h-3.5 rounded cursor-pointer accent-gray-900 mt-1 flex-shrink-0" />
                   <Link href={`/invoices/${inv.id}`} className="font-bold text-sm text-gray-900 leading-snug flex-1 min-w-0 truncate">
                     {inv.customer_name}
                   </Link>
@@ -308,7 +378,11 @@ export default function InvoicesClient({ restaurantId }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs font-semibold text-gray-400 border-b border-gray-100">
-                  <th className="text-left px-5 py-3 whitespace-nowrap">#</th>
+                  <th className="pl-5 pr-2 py-3 w-8">
+                    <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0}
+                      onChange={toggleAll} className="w-3.5 h-3.5 rounded cursor-pointer accent-gray-900" />
+                  </th>
+                  <th className="text-left px-3 py-3 whitespace-nowrap">#</th>
                   <th className="text-left px-3 py-3 w-full">Customer</th>
                   <th className="text-left px-3 py-3 whitespace-nowrap">Date</th>
                   <th className="text-right px-3 py-3 whitespace-nowrap">Total</th>
@@ -322,7 +396,11 @@ export default function InvoicesClient({ restaurantId }: Props) {
                     key={inv.id}
                     className={`group ${i < filtered.length - 1 ? "border-b border-gray-100" : ""} hover:bg-gray-50 transition-colors`}
                   >
-                    <td className="px-5 py-3.5 font-semibold text-gray-700 whitespace-nowrap">{inv.invoice_number}</td>
+                    <td className="pl-5 pr-2 py-3.5">
+                      <input type="checkbox" checked={selected.has(inv.id)}
+                        onChange={() => toggleSelect(inv.id)} className="w-3.5 h-3.5 rounded cursor-pointer accent-gray-900" />
+                    </td>
+                    <td className="px-3 py-3.5 font-semibold text-gray-700 whitespace-nowrap">{inv.invoice_number}</td>
                     <td className="px-3 py-3.5 w-full max-w-0">
                       <Link href={`/invoices/${inv.id}`} className="font-semibold hover:underline block truncate">{inv.customer_name}</Link>
                     </td>
@@ -377,6 +455,16 @@ export default function InvoicesClient({ restaurantId }: Props) {
         />
       )}
 
+      {bulkDeleteConfirm && (
+        <ConfirmModal
+          title={`Delete ${selected.size} invoice${selected.size !== 1 ? "s" : ""}?`}
+          message="This action cannot be undone."
+          confirmLabel={bulkDeleting ? "Deleting…" : "Delete all"}
+          danger
+          onConfirm={handleBulkDelete}
+          onCancel={() => setBulkDeleteConfirm(false)}
+        />
+      )}
       {pdfError && (
         <ConfirmModal
           title="PDF Error"

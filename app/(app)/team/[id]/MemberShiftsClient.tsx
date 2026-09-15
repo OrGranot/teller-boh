@@ -1,6 +1,5 @@
 "use client";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import DatePicker from "@/components/DatePicker";
 import ShiftTable, { ShiftRow } from "@/components/ShiftTable";
@@ -59,7 +58,6 @@ export default function MemberShiftsClient({
   initialYear, initialMonth, initialShifts, firstShiftISO, lastShiftISO,
 }: Props) {
   const supabase = createClient();
-  const router   = useRouter();
 
   const [shifts,  setShifts]  = useState<ShiftRow[]>(initialShifts);
   const [loading, setLoading] = useState(false);
@@ -176,7 +174,6 @@ export default function MemberShiftsClient({
     cancel();
     window.dispatchEvent(new CustomEvent("easyboh:shift-changed", { detail: { profileId } }));
     loadShifts(range);
-    router.refresh();
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -334,7 +331,7 @@ export default function MemberShiftsClient({
         canEdit={canEdit}
         canApprove={canApprove}
         hideClockOut
-        onRefresh={() => { loadShifts(range); router.refresh(); }}
+        onRefresh={() => loadShifts(range)}
       />
     </div>
   );

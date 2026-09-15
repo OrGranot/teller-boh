@@ -119,6 +119,8 @@ export interface AppContext {
 export interface CompanySettings {
   id?: string;
   restaurant_id?: string;
+  label?: string;
+  is_default?: boolean;
   name: string;
   display_name?: string;
   address: string;
@@ -168,6 +170,7 @@ export interface InvoiceItem {
 export interface Invoice {
   id?: string;
   restaurant_id?: string;
+  company_settings_id?: string;
   invoice_number?: string;
   date: string;
   due_date: string;

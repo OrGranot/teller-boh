@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import TimeInput from "@/components/TimeInput";
 import { createClient } from "@/lib/supabase/client";
@@ -43,6 +43,10 @@ interface Props {
   onRefresh: () => void;
   /** Hide the clock-out button on active shifts (e.g. when a banner already provides it) */
   hideClockOut?: boolean;
+  /** Employee: callback to open the request-change modal for a shift */
+  onRequestChange?: (shift: { id: string; clocked_in_at: string; clocked_out_at: string | null }) => void;
+  /** Shift IDs that already have a pending change request */
+  pendingRequestShiftIds?: Set<string>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -116,7 +120,7 @@ function SortTh({ label, sortKey, current, dir, onSort, className = "" }: {
 export default function ShiftTable({
   shifts, loading, currentUserId, canEdit, canApprove = false, pendingCount, onApproveAll,
   profilesMap, profileDeptMap, allDepartments = [],
-  onDepartmentCreated, onDepartmentToggled, onDepartmentDeleted, onRefresh, hideClockOut = false,
+  onDepartmentCreated, onDepartmentToggled, onDepartmentDeleted, onRefresh, hideClockOut = false, onRequestChange, pendingRequestShiftIds,
 }: Props) {
   const supabase = createClient();
   const showEmployee = !!profilesMap;
@@ -137,6 +141,11 @@ export default function ShiftTable({
   const [saving,      setSaving]      = useState<string | null>(null);
   const [editError,   setEditError]   = useState<string | null>(null);
   const [saveError,   setSaveError]   = useState<string | null>(null);
+
+  // Optimistic overrides — show new value immediately while onRefresh re-fetches
+  const [optimistic, setOptimistic] = useState<Record<string, { clocked_in_at?: string; clocked_out_at?: string }>>({});
+  // Clear overrides whenever the parent passes fresh shift data
+  useEffect(() => { setOptimistic({}); }, [shifts]);
 
   // Row expand (mobile drawer)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -163,7 +172,9 @@ export default function ShiftTable({
   function startEdit(shiftId: string, field: "in" | "out") {
     if (!canEdit) return;
     const s = shifts.find(x => x.id === shiftId)!;
-    if (s.status === "active") return;
+    // Active shifts: allow editing clock-in (to fix a wrong start time) but not
+    // clock-out (the shift hasn't ended yet so there's nothing to set).
+    if (s.status === "active" && field === "out") return;
     setEditingCell(`${shiftId}:${field}`);
     setEditError(null);
     setSaveError(null);
@@ -173,22 +184,39 @@ export default function ShiftTable({
     const s = shifts.find(x => x.id === shiftId);
     if (!s || !finalValue) { setEditingCell(null); return; }
 
-    const isoValue = field === "in"
+    let isoValue = field === "in"
       ? buildISO(s.clocked_in_at, finalValue)
       : buildISO(s.clocked_out_at || s.clocked_in_at, finalValue, s.clocked_in_at);
 
-    // Validation
+    // Validation — for clock-out, if result is before clock-in, try +1 day (overnight)
     if (field === "out" && s.clocked_in_at && new Date(isoValue) <= new Date(s.clocked_in_at)) {
-      setEditError(`${shiftId}:out`); setEditingCell(null);
-      setTimeout(() => setEditError(null), 3000); return;
+      const next = new Date(isoValue);
+      next.setDate(next.getDate() + 1);
+      if (next.getTime() > new Date(s.clocked_in_at).getTime()) {
+        isoValue = next.toISOString();
+      } else {
+        setEditError(`${shiftId}:out`); setEditingCell(null);
+        setTimeout(() => setEditError(null), 3000); return;
+      }
     }
+    // For clock-in, if result is after clock-out, try -1 day (overnight: start was previous day)
     if (field === "in" && s.clocked_out_at && new Date(isoValue) >= new Date(s.clocked_out_at)) {
-      setEditError(`${shiftId}:in`); setEditingCell(null);
-      setTimeout(() => setEditError(null), 3000); return;
+      const prev = new Date(isoValue);
+      prev.setDate(prev.getDate() - 1);
+      if (prev.getTime() < new Date(s.clocked_out_at).getTime()) {
+        isoValue = prev.toISOString();
+      } else {
+        setEditError(`${shiftId}:in`); setEditingCell(null);
+        setTimeout(() => setEditError(null), 3000); return;
+      }
     }
 
     setSaving(`${shiftId}:${field}`);
     const payload = field === "in" ? { clocked_in_at: isoValue } : { clocked_out_at: isoValue };
+
+    // Optimistic: show new value immediately so the old time doesn't flash back
+    setOptimistic(prev => ({ ...prev, [shiftId]: { ...prev[shiftId], ...payload } }));
+    setEditingCell(null);
 
     const res = await fetch(`/api/shifts/${shiftId}`, {
       method: "PATCH",
@@ -197,9 +225,9 @@ export default function ShiftTable({
     });
 
     setSaving(null);
-    setEditingCell(null);
 
     if (!res.ok) {
+      setOptimistic(prev => { const n = { ...prev }; delete n[shiftId]; return n; });
       setSaveError(`${shiftId}:${field}`);
       setTimeout(() => setSaveError(null), 4000); return;
     }
@@ -237,8 +265,12 @@ export default function ShiftTable({
     onRefresh();
   }
 
-  // ── Sort ───────────────────────────────────────────────────
-  const sorted = [...shifts].sort((a, b) => {
+  // ── Apply optimistic overrides then sort ────────────────────
+  const effectiveShifts = shifts.map(s => {
+    const o = optimistic[s.id];
+    return o ? { ...s, ...o } : s;
+  });
+  const sorted = [...effectiveShifts].sort((a, b) => {
     let cmp = 0;
     if (sortKey === "date")     cmp = new Date(a.clocked_in_at).getTime() - new Date(b.clocked_in_at).getTime();
     if (sortKey === "employee") cmp = (profilesMap?.[a.profile_id] ?? "").localeCompare(profilesMap?.[b.profile_id] ?? "");
@@ -306,11 +338,11 @@ export default function ShiftTable({
           <span className="font-semibold">{netHours.toFixed(1)}</span> hrs
           <span className="relative group inline-flex items-center cursor-help">
             <span className="w-3.5 h-3.5 rounded-full border border-gray-300 text-gray-400 text-[9px] font-bold inline-flex items-center justify-center leading-none select-none">?</span>
-            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-[60]">
-              <div className="bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2 shadow-xl max-w-[200px] text-center">
+            <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:flex flex-col items-center z-[60]">
+              <div className="border-[5px] border-transparent border-b-gray-900 -mb-px" />
+              <div className="bg-gray-900 text-white text-[11px] rounded-lg px-3 py-2 shadow-xl whitespace-nowrap text-center">
                 30-min break deducted for shifts over 6 hours
               </div>
-              <div className="border-[5px] border-transparent border-t-gray-900 -mt-px" />
             </div>
           </span>
         </span>
@@ -353,7 +385,8 @@ export default function ShiftTable({
             </tr>
           ) : sorted.map((s, i) => {
             const isSaving   = saving?.startsWith(s.id);
-            const editable   = canEdit && s.status !== "active";
+            const editable    = canEdit && s.status !== "active";
+            const editableIn  = canEdit; // clock-in is editable on any shift, including active
             const isExpanded = expandedIds.has(s.id);
             const isLast     = i === sorted.length - 1;
 
@@ -400,7 +433,7 @@ export default function ShiftTable({
 
                   {/* Clock in — desktop only */}
                   <td className="hidden sm:table-cell px-3 py-3">
-                    <ClockInCell s={s} editable={editable} />
+                    <ClockInCell s={s} editable={editableIn} />
                   </td>
 
                   {/* Clock out — desktop only */}
@@ -432,12 +465,27 @@ export default function ShiftTable({
                   <td className="px-3 py-3">
                     {s.status === "pending" && canApprove ? (
                       <button onClick={() => handleApprove(s.id)}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors whitespace-nowrap">
-                        Approve
+                        className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition-colors whitespace-nowrap cursor-pointer shadow-sm">
+                        ✓ Approve
                       </button>
                     ) : (
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${STATUS_STYLE[s.status] || ""}`}>
-                        {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                      <span className="inline-flex items-center gap-2">
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${STATUS_STYLE[s.status] || ""}`}>
+                          {s.status.charAt(0).toUpperCase() + s.status.slice(1)}
+                        </span>
+                        {onRequestChange && s.status !== "active" && s.clocked_out_at && (
+                          pendingRequestShiftIds?.has(s.id) ? (
+                            <span className="text-[10px] font-semibold text-blue-500 whitespace-nowrap">
+                              ✓ Change requested
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => onRequestChange({ id: s.id, clocked_in_at: s.clocked_in_at, clocked_out_at: s.clocked_out_at })}
+                              className="text-[10px] font-semibold text-gray-400 hover:text-gray-700 transition-colors cursor-pointer whitespace-nowrap">
+                              ✎ Request change
+                            </button>
+                          )
+                        )}
                       </span>
                     )}
                   </td>
@@ -482,7 +530,7 @@ export default function ShiftTable({
                       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Clock in</p>
-                          <ClockInCell s={s} editable={editable} />
+                          <ClockInCell s={s} editable={editableIn} />
                         </div>
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Clock out</p>
@@ -513,7 +561,7 @@ export default function ShiftTable({
                           <div className="col-span-2 flex gap-2 pt-1 border-t border-gray-200">
                             {s.status === "pending" && canApprove && (
                               <button onClick={() => { handleApprove(s.id); toggleExpand(s.id); }}
-                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors">
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer">
                                 ✓ Approve
                               </button>
                             )}
@@ -528,6 +576,21 @@ export default function ShiftTable({
                               className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
                               Delete
                             </button>
+                          </div>
+                        )}
+                        {onRequestChange && !canEdit && s.status !== "active" && s.clocked_out_at && (
+                          <div className="col-span-2 flex gap-2 pt-1 border-t border-gray-200">
+                            {pendingRequestShiftIds?.has(s.id) ? (
+                              <span className="text-xs font-semibold text-blue-500 px-3 py-1.5">
+                                ✓ Change requested
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => { onRequestChange({ id: s.id, clocked_in_at: s.clocked_in_at, clocked_out_at: s.clocked_out_at }); toggleExpand(s.id); }}
+                                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer">
+                                ✎ Request change
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

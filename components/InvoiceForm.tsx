@@ -140,9 +140,21 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [itemHighlight, setItemHighlight] = useState(-1);
   const itemSugRef = useRef<HTMLDivElement>(null);
 
+  // Business profiles
+  const [bizProfiles, setBizProfiles] = useState<{ id: string; label: string | null; name: string; is_default: boolean }[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(initial?.company_settings_id || "");
+
   useEffect(() => {
     supabase.from("contacts").select("*").eq("restaurant_id", restaurantId).order("name").then(({ data }) => setContacts(data || []));
     supabase.from("catalog_items").select("*").eq("restaurant_id", restaurantId).order("name").then(({ data }) => setCatalogItems(data || []));
+    supabase.from("company_settings").select("id, label, name, is_default").eq("restaurant_id", restaurantId).order("is_default", { ascending: false }).then(({ data }) => {
+      const ps = data || [];
+      setBizProfiles(ps);
+      if (!initial?.company_settings_id) {
+        const def = ps.find(p => p.is_default) || ps[0];
+        if (def) setSelectedProfileId(def.id);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -365,6 +377,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     return {
       id: savedId || undefined,
       restaurant_id: restaurantId,
+      company_settings_id: selectedProfileId || undefined,
       invoice_number: invoiceNumber,
       date,
       due_date: dueDate,
@@ -466,6 +479,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       lang: invoice.lang,
       total: totalVal,
       notes: notes.trim() || null,
+      customer_email: invoice.customer_email || null,
+      company_settings_id: invoice.company_settings_id || null,
     };
 
     let id = savedId;
@@ -581,6 +596,23 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
       </div>
 
       <div className="bg-white rounded-2xl p-8 space-y-8" style={{ boxShadow: "0 2px 20px rgba(0,0,0,0.07)" }}>
+        {/* Business profile selector */}
+        {bizProfiles.length > 1 && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1.5">Business profile</label>
+            <select value={selectedProfileId} onChange={e => setSelectedProfileId(e.target.value)}
+              disabled={!!savedId}
+              className={`w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-white ${savedId ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+              {bizProfiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.label || p.name}{p.is_default ? " (Default)" : ""}
+                </option>
+              ))}
+            </select>
+            {savedId && <p className="text-[10px] text-gray-400 mt-1">Profile cannot be changed after the invoice is saved.</p>}
+          </div>
+        )}
+
         {/* Dates */}
         <div className="grid grid-cols-2 gap-4">
           <div>

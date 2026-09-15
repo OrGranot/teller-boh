@@ -25,7 +25,7 @@ export interface BalanceParams {
   sickDays:            number;
   /** Inclusive upper bound, YYYY-MM-DD. Caller decides (today or user-chosen). */
   untilDate:           string;
-  shifts:      { clocked_in_at: string; clocked_out_at: string | null }[];
+  shifts:      { clocked_in_at: string; clocked_out_at: string | null; status?: string }[];
   adjustments: HoursAdjustment[];
 }
 
@@ -83,8 +83,12 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
   // Count ALL shifts up to untilDate — shifts before contract start are still
   // real work (overtime/compensation) and must be credited to the balance.
   // Only cut off at periodEnd so future shifts aren't counted yet.
+  // Pending/unapproved shifts are excluded — they must be approved by a manager
+  // before they affect the balance (prevents e.g. a forgotten clock-out from
+  // inflating the balance by dozens of hours).
   const shiftsToCount = p.shifts.filter(
     s => new Date(s.clocked_in_at).getTime() <= periodEnd.getTime()
+      && (s.status === undefined || s.status === "approved")
   );
 
   const workedHours   = calcWorkedHours(shiftsToCount);
@@ -206,7 +210,7 @@ const ZERO_RESULT: BalanceResult = {
 export function calcMultiContractBalance(
   contracts: ContractPeriod[],
   untilDate: string,
-  shifts:      { clocked_in_at: string; clocked_out_at: string | null }[],
+  shifts:      { clocked_in_at: string; clocked_out_at: string | null; status?: string }[],
   adjustments: HoursAdjustment[]
 ): MultiBalanceResult {
   // Only contracts with hours set can contribute to the balance

@@ -33,22 +33,16 @@ export async function POST(req: NextRequest) {
   const restaurantId = member.restaurant_id;
 
   try {
-    const { invoice }: { invoice: Invoice } = await req.json();
+    const { invoice, skipSave }: { invoice: Invoice; skipSave?: boolean } = await req.json();
 
-    // Load company settings for this restaurant (fall back to any row if migration not yet run)
-    let { data: company } = await supabase
-      .from("company_settings")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .limit(1)
-      .single();
+    // Load company settings — prefer the specific profile linked to this invoice
+    let { data: company } = invoice.company_settings_id
+      ? await supabase.from("company_settings").select("*").eq("id", invoice.company_settings_id).single()
+      : await supabase.from("company_settings").select("*").eq("restaurant_id", restaurantId).eq("is_default", true).limit(1).single();
 
     if (!company) {
       const { data: fallback } = await supabase
-        .from("company_settings")
-        .select("*")
-        .limit(1)
-        .single();
+        .from("company_settings").select("*").eq("restaurant_id", restaurantId).limit(1).single();
       company = fallback;
     }
 
@@ -83,6 +77,7 @@ export async function POST(req: NextRequest) {
       due_date: invoice.due_date,
       customer_name: invoice.customer_name,
       customer_address: invoice.customer_address,
+      customer_email: invoice.customer_email || null,
       customer_trade_register: invoice.customer_trade_register || null,
       customer_tax_number: invoice.customer_tax_number || null,
       customer_vat_number: invoice.customer_vat_number || null,
@@ -90,57 +85,60 @@ export async function POST(req: NextRequest) {
       lang: invoice.lang,
       total,
       notes: invoice.notes?.trim() || null,
+      company_settings_id: invoice.company_settings_id || null,
     };
 
     let savedInvoiceId = invoice.id;
-    if (invoice.id) {
-      // Try with tip_amount; fall back without if column missing (migration pending)
-      const { error: upErr } = await supabase.from("invoices").update({
-        ...coreInvoicePayload,
-        tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
-        status: invoice.status === "paid" ? "paid" : "sent",
-        updated_at: new Date().toISOString(),
-      }).eq("id", invoice.id).eq("restaurant_id", restaurantId);
-      if (upErr) {
-        await supabase.from("invoices").update({
+    if (!skipSave) {
+      if (invoice.id) {
+        // Try with tip_amount; fall back without if column missing (migration pending)
+        const { error: upErr } = await supabase.from("invoices").update({
           ...coreInvoicePayload,
+          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
           status: invoice.status === "paid" ? "paid" : "sent",
           updated_at: new Date().toISOString(),
         }).eq("id", invoice.id).eq("restaurant_id", restaurantId);
+        if (upErr) {
+          await supabase.from("invoices").update({
+            ...coreInvoicePayload,
+            status: invoice.status === "paid" ? "paid" : "sent",
+            updated_at: new Date().toISOString(),
+          }).eq("id", invoice.id).eq("restaurant_id", restaurantId);
+        }
+        await supabase.from("invoice_items").delete().eq("invoice_id", invoice.id);
+      } else {
+        const baseInsert = {
+          invoice_number: invoiceNumber,
+          ...coreInvoicePayload,
+          status: "sent",
+          restaurant_id: restaurantId,
+        };
+        let { data: newInvoice } = await supabase.from("invoices").insert({
+          ...baseInsert,
+          tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
+        }).select("id").single();
+        if (!newInvoice) {
+          const { data: fallbackInvoice } = await supabase.from("invoices").insert(baseInsert).select("id").single();
+          newInvoice = fallbackInvoice;
+        }
+        savedInvoiceId = newInvoice?.id;
       }
-      await supabase.from("invoice_items").delete().eq("invoice_id", invoice.id);
-    } else {
-      const baseInsert = {
-        invoice_number: invoiceNumber,
-        ...coreInvoicePayload,
-        status: "sent",
-        restaurant_id: restaurantId,
-      };
-      let { data: newInvoice } = await supabase.from("invoices").insert({
-        ...baseInsert,
-        tip_amount: tipFixedAmt > 0 ? tipFixedAmt : null,
-      }).select("id").single();
-      if (!newInvoice) {
-        const { data: fallbackInvoice } = await supabase.from("invoices").insert(baseInsert).select("id").single();
-        newInvoice = fallbackInvoice;
-      }
-      savedInvoiceId = newInvoice?.id;
-    }
 
-    // Insert line items
-    if (savedInvoiceId) {
-      const itemRows = invoice.items
-        .filter((item) => item.description?.trim())
-        .map((item, idx) => ({
-          invoice_id: savedInvoiceId,
-          qty: parseFloat(item.qty || "0"),
-          description: item.description,
-          price: parseFloat(item.price || "0"),
-          vat_rate: parseFloat(item.vat_rate || "7"),
-          sort_order: idx,
-        }));
-      if (itemRows.length > 0) {
-        await supabase.from("invoice_items").insert(itemRows);
+      // Insert line items
+      if (savedInvoiceId) {
+        const itemRows = invoice.items
+          .filter((item) => item.description?.trim())
+          .map((item, idx) => ({
+            invoice_id: savedInvoiceId,
+            qty: parseFloat(item.qty || "0"),
+            description: item.description,
+            price: parseFloat(item.price || "0"),
+            vat_rate: parseFloat(item.vat_rate || "7"),
+            sort_order: idx,
+          }));
+        if (itemRows.length > 0) {
+          await supabase.from("invoice_items").insert(itemRows);
+        }
       }
     }
 

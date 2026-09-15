@@ -102,6 +102,7 @@ export default async function EditInvoicePage({
 
   const invoice: Invoice = {
     id: inv.id,
+    company_settings_id: inv.company_settings_id || undefined,
     invoice_number: inv.invoice_number,
     date: inv.date,
     due_date: inv.due_date,

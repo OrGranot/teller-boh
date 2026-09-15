@@ -47,13 +47,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Load company settings
-    const { data: company } = await supabase
-      .from("company_settings")
-      .select("*")
-      .eq("restaurant_id", restaurantId)
-      .limit(1)
-      .single();
+    // Load company settings — prefer the profile linked to this invoice
+    let { data: company } = invoice.company_settings_id
+      ? await supabase.from("company_settings").select("*").eq("id", invoice.company_settings_id).single()
+      : await supabase.from("company_settings").select("*").eq("restaurant_id", restaurantId).eq("is_default", true).limit(1).single();
+    if (!company) {
+      const { data: fallback } = await supabase.from("company_settings").select("*").eq("restaurant_id", restaurantId).limit(1).single();
+      company = fallback;
+    }
 
     if (!company) {
       return NextResponse.json(
@@ -187,8 +188,8 @@ export async function POST(req: NextRequest) {
 
     await resend.emails.send({
       to: invoice.customer_email,
-      from: `${company.name} <${FROM_EMAIL}>`,
-      cc: "hello@tellerberlin.com",
+      from: `${company.display_name || company.name} <${FROM_EMAIL}>`,
+      cc: company.email || "hello@tellerberlin.com",
       subject,
       text: body,
       attachments: [

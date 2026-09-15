@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { AppContext } from "@/lib/types";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 
 interface MobileNavItem {
   href: string; label: string; icon: string;
@@ -29,7 +30,8 @@ const navItems: MobileNavItem[] = [
 
 export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
   const [open,         setOpen]         = useState(false);
-  const [pwResetState, setPwResetState] = useState<"idle" | "sending" | "sent">("idle");
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const pathname = usePathname();
   const router   = useRouter();
   const perms    = ctx.role.permissions as Record<string, boolean>;
@@ -51,18 +53,13 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
     router.push("/login");
   }
 
-  async function sendPasswordReset() {
-    setPwResetState("sending");
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.email) { setPwResetState("idle"); return; }
-    await fetch("/api/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: user.email }),
-    });
-    setPwResetState("sent");
-    setTimeout(() => setPwResetState("idle"), 4000);
+  async function openChangePw() {
+    if (!userEmail) {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) setUserEmail(user.email);
+    }
+    setShowChangePw(true);
   }
 
   return (
@@ -172,13 +169,15 @@ export default function MobileNavBar({ ctx }: { ctx: AppContext }) {
           </div>
           <button
             type="button"
-            onClick={sendPasswordReset}
-            disabled={pwResetState !== "idle"}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/8 w-full transition-colors disabled:opacity-60"
+            onClick={openChangePw}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/8 w-full transition-colors cursor-pointer"
           >
             <span className="w-5 text-center">🔑</span>
-            {pwResetState === "sent" ? "Email sent ✓" : pwResetState === "sending" ? "Sending…" : "Change password"}
+            Change password
           </button>
+          {showChangePw && userEmail && (
+            <ChangePasswordModal email={userEmail} onClose={() => setShowChangePw(false)} />
+          )}
           <button
             type="button"
             onClick={signOut}

@@ -10,8 +10,9 @@ import ShiftTable, { ShiftRow } from "@/components/ShiftTable";
 import SearchableSelect from "@/components/SearchableSelect";
 import ChecklistSelect from "@/components/ChecklistSelect";
 import LiveDuration from "@/components/LiveDuration";
-import EmployeeBalanceCard from "@/components/EmployeeBalanceCard";
 import { useImport } from "@/lib/import-context";
+import PendingRequests from "@/components/PendingRequests";
+import RequestChangeModal from "@/components/RequestChangeModal";
 
 interface ActiveEmployee {
   id: string;
@@ -60,6 +61,9 @@ export default function ShiftsClient({
   const [clocking,      setClocking]      = useState(false);
   const [activeShift,   setActiveShift]   = useState<TimeRecord | null>(null);
   const [showAddShift,  setShowAddShift]  = useState(false);
+  const [requestShift,  setRequestShift]  = useState<{ id: string; clocked_in_at: string; clocked_out_at: string | null } | null | "new">(false as unknown as null);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const [pendingRequestShiftIds, setPendingRequestShiftIds] = useState<Set<string>>(new Set());
   const [activeEmployees, setActiveEmployees] = useState<ActiveEmployee[]>([]);
   const [clockingOutId,  setClockingOutId]  = useState<string | null>(null);
 
@@ -150,7 +154,17 @@ export default function ShiftsClient({
     setActiveShift(data as TimeRecord | null);
   }, [currentUserId, restaurantId]);
 
-  useEffect(() => { loadRecords(); loadActiveShift(); }, [loadRecords, loadActiveShift]);
+  const loadPendingRequests = useCallback(async () => {
+    if (canViewAll) return;
+    const res = await fetch("/api/shift-requests");
+    if (res.ok) {
+      const data = await res.json();
+      setPendingRequestCount(data.length);
+      setPendingRequestShiftIds(new Set(data.filter((r: { shift_id: string | null }) => r.shift_id).map((r: { shift_id: string }) => r.shift_id)));
+    }
+  }, [canViewAll]);
+
+  useEffect(() => { loadRecords(); loadActiveShift(); loadPendingRequests(); }, [loadRecords, loadActiveShift, loadPendingRequests]);
 
   // Separate effect for the owner "currently clocked in" panel — runs on mount
   // and every 30s; also triggered manually via refreshActiveEmployees ref.
@@ -250,8 +264,14 @@ export default function ShiftsClient({
         <div className="flex items-center gap-2 flex-wrap">
           {canEdit && (
             <button onClick={() => setShowAddShift(true)}
-              className="px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors whitespace-nowrap">
+              className="px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors whitespace-nowrap cursor-pointer">
               + Add shift
+            </button>
+          )}
+          {!canEdit && !isCurrentUserDeactivated && (
+            <button onClick={() => setRequestShift("new")}
+              className="px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-colors whitespace-nowrap cursor-pointer">
+              + Request shift
             </button>
           )}
           {canEdit && <ImportButton onImported={loadRecords} />}
@@ -265,11 +285,6 @@ export default function ShiftsClient({
           )}
         </div>
       </div>
-
-      {/* Employee: balance summary card (not shown to managers/owners who see all shifts) */}
-      {!canViewAll && (
-        <EmployeeBalanceCard userId={currentUserId} restaurantId={restaurantId} />
-      )}
 
       {/* My active shift banner */}
       {activeShift && (
@@ -330,6 +345,16 @@ export default function ShiftsClient({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Manager: pending shift change requests */}
+      {canViewAll && <PendingRequests onApproved={loadRecords} />}
+
+      {/* Employee: pending request count */}
+      {!canViewAll && pendingRequestCount > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          You have {pendingRequestCount} pending shift request{pendingRequestCount !== 1 ? "s" : ""} awaiting manager approval.
         </div>
       )}
 
@@ -430,7 +455,9 @@ export default function ShiftsClient({
             return next;
           });
         }}
-        onRefresh={() => { loadRecords(); router.refresh(); }}
+        onRefresh={loadRecords}
+        onRequestChange={!canEdit && !isCurrentUserDeactivated ? (shift) => setRequestShift(shift) : undefined}
+        pendingRequestShiftIds={pendingRequestShiftIds}
       />
 
       {showAddShift && (
@@ -438,8 +465,17 @@ export default function ShiftsClient({
           restaurantId={restaurantId}
           currentUserId={currentUserId}
           teamMembers={teamMembers}
-          onSaved={() => { loadRecords(); router.refresh(); }}
+          onSaved={loadRecords}
           onClose={() => setShowAddShift(false)}
+        />
+      )}
+
+      {requestShift && (
+        <RequestChangeModal
+          restaurantId={restaurantId}
+          shift={requestShift === "new" ? null : requestShift}
+          onSaved={() => { loadRecords(); loadPendingRequests(); }}
+          onClose={() => setRequestShift(null)}
         />
       )}
     </div>

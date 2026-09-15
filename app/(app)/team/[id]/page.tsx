@@ -272,17 +272,19 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
         }}
       />
 
-      {/* Unified contracts + hours balance card */}
-      <ContractBalanceClient
-        profileId={id}
-        canEdit={isOwner}
-        initialContracts={contracts}
-        firstShiftISO={firstShiftISO}
-        employmentEnd={member.contract_end ?? null}
-        serverToday={new Date().toISOString().slice(0, 10)}
-        allShifts={(allShifts || []) as { clocked_in_at: string; clocked_out_at: string | null; status: string }[]}
-        adjustments={(adjustments || []) as { id: string; hours: number; note: string | null; adjustment_date: string }[]}
-      />
+      {/* Unified contracts + hours balance card — owners only, hidden from the employee's own view */}
+      {isOwner && (
+        <ContractBalanceClient
+          profileId={id}
+          canEdit={isOwner}
+          initialContracts={contracts}
+          firstShiftISO={firstShiftISO}
+          employmentEnd={member.contract_end ?? null}
+          serverToday={new Date().toISOString().slice(0, 10)}
+          allShifts={(allShifts || []) as { clocked_in_at: string; clocked_out_at: string | null; status: string }[]}
+          adjustments={(adjustments || []) as { id: string; hours: number; note: string | null; adjustment_date: string }[]}
+        />
+      )}
 
       <MemberShiftsClient
         profileId={id}
