@@ -250,8 +250,12 @@ export default function ContractBalanceClient({
   const [untilDate, setUntilDate] = useState(employmentEnd ?? serverToday);
   useEffect(() => { setUntilDate(employmentEnd ?? serverToday); }, [employmentEnd, serverToday]);
 
+  // At (or after) the employment end, also count shifts worked after it
+  const shiftsUntil = employmentEnd && untilDate >= employmentEnd && serverToday > untilDate
+    ? serverToday
+    : untilDate;
   const { periods, total } = dataReady && contracts.length > 0
-    ? calcMultiContractBalance(contracts, untilDate, allShifts, adjustments)
+    ? calcMultiContractBalance(contracts, untilDate, allShifts, adjustments, shiftsUntil)
     : { periods: [], total: { balance: 0, workedHours: 0, expectedHours: 0, vacationAccrued: null as number | null, vacationCredit: 0, sickCredit: 0, holidayCount: 0, holidayCountRaw: 0, holidayCredit: 0, workedHolidayList: [] as { date: string; name: string }[], paidOutHours: 0, periodDays: 0, dailyHours: 0 } };
 
   // Map contract id → period result for quick lookup
@@ -417,13 +421,9 @@ export default function ContractBalanceClient({
   }
 
   // ── Diagnostics ────────────────────────────────────────────────────────────
-  const firstFrom     = sortedAsc[0]?.valid_from;
-  const periodStart   = firstFrom ? new Date(firstFrom + "T00:00:00Z") : null;
-  const periodEnd     = new Date(untilDate + "T23:59:59Z");
-  const shiftsInPeriod = allShifts.filter(s => {
-    const t = new Date(s.clocked_in_at).getTime();
-    return (!periodStart || t >= periodStart.getTime()) && t <= periodEnd.getTime();
-  });
+  // Every shift that counts toward the balance
+  const periodEnd     = new Date(shiftsUntil + "T23:59:59Z");
+  const shiftsInPeriod = allShifts.filter(s => new Date(s.clocked_in_at).getTime() <= periodEnd.getTime());
   const missingClockOut = shiftsInPeriod.filter(s => !s.clocked_out_at).length;
 
   // ── Render ─────────────────────────────────────────────────────────────────

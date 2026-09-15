@@ -24,6 +24,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const today = new Date().toISOString().slice(0, 10);
   const isDeactivated = !!(member.contract_end && member.contract_end <= today);
 
+  // Employees whose employment has ended can no longer use the app. Owners are
+  // exempt so a restaurant can never lock itself out.
+  if (isDeactivated && !(member.role as { is_owner?: boolean } | null)?.is_owner) {
+    redirect("/api/auth/deactivated");
+  }
+
   const profile = profileResult.data;
 
   const ctx: AppContext = {

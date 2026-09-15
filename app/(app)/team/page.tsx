@@ -134,6 +134,7 @@ export default async function TeamPage() {
           m.contract_end ?? today,
           shiftsByProfile[m.profile_id]      || [],
           adjustmentsByProfile[m.profile_id] || [],
+          today, // count shifts worked after the employment ended too
         )
       : null;
 

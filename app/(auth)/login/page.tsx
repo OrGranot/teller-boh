@@ -4,12 +4,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
+const DEACTIVATED_MESSAGE = "Your employment has ended, so this account can no longer sign in.";
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    searchParams.get("deactivated") ? DEACTIVATED_MESSAGE : ""
+  );
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,9 +25,17 @@ function LoginForm() {
     if (error) { setError(error.message); setLoading(false); return; }
     const { data: member } = await supabase
       .from("restaurant_members")
-      .select("restaurant_id")
+      .select("restaurant_id, contract_end, role:roles(is_owner)")
       .limit(1)
       .single();
+    const today = new Date().toISOString().slice(0, 10);
+    const isOwner = (member?.role as { is_owner?: boolean } | null)?.is_owner;
+    if (member?.contract_end && member.contract_end <= today && !isOwner) {
+      await supabase.auth.signOut();
+      setError(DEACTIVATED_MESSAGE);
+      setLoading(false);
+      return;
+    }
     router.push(member ? "/shifts" : "/setup");
   }
 

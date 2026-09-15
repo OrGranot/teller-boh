@@ -158,18 +158,17 @@ export default function HoursBalanceClient({
   }
 
   // ── Calculate ─────────────────────────────────────────────────────────────
+  // At (or after) the employment end, also count shifts worked after it
+  const shiftsUntil = employmentEnd && untilDate >= employmentEnd && serverToday > untilDate
+    ? serverToday
+    : untilDate;
   const { periods, total } = calcMultiContractBalance(
-    contracts, untilDate, allShifts, adjustments
+    contracts, untilDate, allShifts, adjustments, shiftsUntil
   );
 
-  // Shifts / clock-out diagnostics (for the whole active window)
-  const firstFrom  = [...contracts].sort((a, b) => a.valid_from.localeCompare(b.valid_from))[0]?.valid_from;
-  const periodStart = firstFrom ? new Date(firstFrom + "T00:00:00Z") : null;
-  const periodEnd   = new Date(untilDate + "T23:59:59Z");
-  const shiftsInPeriod = allShifts.filter(s => {
-    const t = new Date(s.clocked_in_at).getTime();
-    return (!periodStart || t >= periodStart.getTime()) && t <= periodEnd.getTime();
-  });
+  // Shifts / clock-out diagnostics (every shift that counts toward the balance)
+  const periodEnd   = new Date(shiftsUntil + "T23:59:59Z");
+  const shiftsInPeriod = allShifts.filter(s => new Date(s.clocked_in_at).getTime() <= periodEnd.getTime());
   const missingClockOut = shiftsInPeriod.filter(s => !s.clocked_out_at).length;
 
   // ── Payout handlers ───────────────────────────────────────────────────────

@@ -80,15 +80,14 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
     ? hoursPerWeek / daysPerWeek
     : hoursPerWeek / 5;
 
-  // Count ALL shifts up to untilDate — shifts before contract start are still
-  // real work (overtime/compensation) and must be credited to the balance.
-  // Only cut off at periodEnd so future shifts aren't counted yet.
+  // Count every shift the caller passes in — the caller decides which shifts
+  // belong to this period, including work before the contract started or after
+  // it ended (still real work that must be credited to the balance).
   // Pending/unapproved shifts are excluded — they must be approved by a manager
   // before they affect the balance (prevents e.g. a forgotten clock-out from
   // inflating the balance by dozens of hours).
   const shiftsToCount = p.shifts.filter(
-    s => new Date(s.clocked_in_at).getTime() <= periodEnd.getTime()
-      && (s.status === undefined || s.status === "approved")
+    s => s.status === undefined || s.status === "approved"
   );
 
   const workedHours   = calcWorkedHours(shiftsToCount);
@@ -128,13 +127,8 @@ export function calcHoursBalance(p: BalanceParams): BalanceResult {
   const sickCredit     = sickDaysN * dailyHours;
   const holidayCredit  = holidayCount * dailyHours;
 
-  // Adjustments within the period only (payout date must fall within [periodStart, periodEnd])
-  const paidOutHours = p.adjustments
-    .filter(a => {
-      const t = new Date(a.adjustment_date + "T12:00:00Z").getTime();
-      return t >= periodStart.getTime() && t <= periodEnd.getTime();
-    })
-    .reduce((sum, a) => sum + Number(a.hours), 0);
+  // Adjustments are pre-assigned to this period by the caller (same as shifts)
+  const paidOutHours = p.adjustments.reduce((sum, a) => sum + Number(a.hours), 0);
 
   const balance =
     workedHours + vacationCredit + sickCredit + holidayCredit - expectedHours - paidOutHours;
@@ -202,16 +196,21 @@ const ZERO_RESULT: BalanceResult = {
  * - Vacation and sick carryover between contracts is implicit: the total is the
  *   sum of per-period balances, so any surplus/deficit flows naturally into
  *   the grand total without resetting.
- * - Shifts before the first contract's valid_from are attributed to the first
- *   period (pre-employment work still counts toward the balance).
- * - Adjustments (overtime payouts) are attributed to the period they fall in.
- * - untilDate caps the calculation globally; closed periods are fully included.
+ * - Every shift counts, even outside a contract window: shifts before the first
+ *   contract go to the first period, shifts after a contract ended (gap or after
+ *   the last contract) go to the most recent period before them. They add worked
+ *   hours without adding expected hours.
+ * - Adjustments (overtime payouts) are attributed the same way.
+ * - untilDate caps expected hours; closed periods are fully included.
+ * - shiftsUntil caps which shifts/adjustments count (defaults to untilDate).
+ *   Pass a later date (e.g. today) to include work after the employment ended.
  */
 export function calcMultiContractBalance(
   contracts: ContractPeriod[],
   untilDate: string,
   shifts:      { clocked_in_at: string; clocked_out_at: string | null; status?: string }[],
-  adjustments: HoursAdjustment[]
+  adjustments: HoursAdjustment[],
+  shiftsUntil: string = untilDate
 ): MultiBalanceResult {
   // Only contracts with hours set can contribute to the balance
   const valid = contracts
@@ -222,60 +221,62 @@ export function calcMultiContractBalance(
     return { periods: [], total: { ...ZERO_RESULT, vacationAccrued: null } };
   }
 
-  const periods: PeriodResult[] = [];
-
-  for (let i = 0; i < valid.length; i++) {
-    const contract = valid[i];
-    const effectiveFrom = contract.valid_from;
-
-    // This period ends at its valid_until, or at untilDate (whichever is earlier)
-    const contractEnd    = contract.valid_until ?? untilDate;
-    const effectiveUntil = contractEnd < untilDate ? contractEnd : untilDate;
-
-    // Skip contracts that haven't started yet relative to untilDate
-    if (effectiveFrom > untilDate) continue;
-
-    const untilMs = new Date(effectiveUntil + "T23:59:59Z").getTime();
-    const fromMs  = new Date(effectiveFrom  + "T00:00:00Z").getTime();
-
-    // Shifts: first contract gets all pre-start shifts too; subsequent contracts
-    // are strictly within their window.
-    const periodShifts =
-      i === 0
-        ? shifts.filter(s => new Date(s.clocked_in_at).getTime() <= untilMs)
-        : shifts.filter(s => {
-            const t = new Date(s.clocked_in_at).getTime();
-            return t >= fromMs && t <= untilMs;
-          });
-
-    // Adjustments: same logic — first period absorbs pre-contract payouts
-    const periodAdjustments =
-      i === 0
-        ? adjustments.filter(a =>
-            new Date(a.adjustment_date + "T12:00:00Z").getTime() <= untilMs
-          )
-        : adjustments.filter(a => {
-            const t = new Date(a.adjustment_date + "T12:00:00Z").getTime();
-            return t >= fromMs && t <= untilMs;
-          });
-
-    const result = calcHoursBalance({
-      contractStart:       effectiveFrom,
-      hoursPerWeek:        Number(contract.hours_per_week),
-      daysPerWeek:         contract.days_per_week,
-      vacationDaysPerYear: contract.vacation_days_per_year,
-      sickDays:            contract.sick_days,
-      untilDate:           effectiveUntil,
-      shifts:              periodShifts,
-      adjustments:         periodAdjustments,
+  // Periods that have started by untilDate; each ends at its valid_until or
+  // untilDate, whichever is earlier
+  const windows = valid
+    .filter(c => c.valid_from <= untilDate)
+    .map(contract => {
+      const contractEnd = contract.valid_until ?? untilDate;
+      return {
+        contract,
+        effectiveFrom:  contract.valid_from,
+        effectiveUntil: contractEnd < untilDate ? contractEnd : untilDate,
+        fromMs:         new Date(contract.valid_from + "T00:00:00Z").getTime(),
+      };
     });
 
-    periods.push({ contract, effectiveFrom, effectiveUntil, result });
-  }
-
-  if (periods.length === 0) {
+  if (windows.length === 0) {
     return { periods: [], total: { ...ZERO_RESULT, vacationAccrued: null } };
   }
+
+  // Index of the most recent period that started on or before t (first period
+  // for anything earlier). Work after a period ended stays with that period.
+  const periodIndexFor = (t: number) => {
+    let idx = 0;
+    windows.forEach((w, i) => { if (w.fromMs <= t) idx = i; });
+    return idx;
+  };
+
+  const shiftsCutoffMs = new Date(
+    (shiftsUntil > untilDate ? shiftsUntil : untilDate) + "T23:59:59Z"
+  ).getTime();
+  const shiftsByPeriod      = windows.map(() => [] as typeof shifts);
+  const adjustmentsByPeriod = windows.map(() => [] as HoursAdjustment[]);
+
+  for (const s of shifts) {
+    const t = new Date(s.clocked_in_at).getTime();
+    if (t <= shiftsCutoffMs) shiftsByPeriod[periodIndexFor(t)].push(s);
+  }
+  for (const a of adjustments) {
+    const t = new Date(a.adjustment_date + "T12:00:00Z").getTime();
+    if (t <= shiftsCutoffMs) adjustmentsByPeriod[periodIndexFor(t)].push(a);
+  }
+
+  const periods: PeriodResult[] = windows.map((w, i) => ({
+    contract:       w.contract,
+    effectiveFrom:  w.effectiveFrom,
+    effectiveUntil: w.effectiveUntil,
+    result: calcHoursBalance({
+      contractStart:       w.effectiveFrom,
+      hoursPerWeek:        Number(w.contract.hours_per_week),
+      daysPerWeek:         w.contract.days_per_week,
+      vacationDaysPerYear: w.contract.vacation_days_per_year,
+      sickDays:            w.contract.sick_days,
+      untilDate:           w.effectiveUntil,
+      shifts:              shiftsByPeriod[i],
+      adjustments:         adjustmentsByPeriod[i],
+    }),
+  }));
 
   // Sum all periods — the vacation/sick carryover is implicit in the totals
   const allNullVacation = periods.every(p => p.result.vacationAccrued === null);
