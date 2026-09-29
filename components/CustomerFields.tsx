@@ -23,6 +23,8 @@ interface Props {
   email?: string;
   onEmailChange?: (v: string) => void;
   emailLabel?: string;
+  nameError?: string | null;
+  emailError?: string | null;
   // Optional business details (invoices only)
   tradeReg?: string;
   onTradeRegChange?: (v: string) => void;
@@ -34,6 +36,19 @@ interface Props {
   onContactSelect?: (c: ContactSuggestion) => void;
 }
 
+const INPUT_CLS = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50";
+const INPUT_ERROR_CLS = "w-full border border-red-400 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 bg-red-50/40 transition-shadow";
+
+function FieldError({ message }: { message?: string | null }) {
+  if (!message) return null;
+  return (
+    <p role="alert" className="flex items-start gap-1.5 mt-1.5 text-xs font-medium text-red-600">
+      <span className="flex-none w-4 h-4 rounded-full bg-red-500 text-white text-[10px] leading-4 text-center font-bold">!</span>
+      {message}
+    </p>
+  );
+}
+
 export default function CustomerFields({
   name, onNameChange,
   street, onStreetChange,
@@ -42,6 +57,8 @@ export default function CustomerFields({
   country, onCountryChange,
   email, onEmailChange,
   emailLabel = "Email (for sending)",
+  nameError,
+  emailError,
   tradeReg, onTradeRegChange,
   taxNum, onTaxNumChange,
   vatNum, onVatNumChange,
@@ -85,8 +102,11 @@ export default function CustomerFields({
           }}
           autoComplete="name"
           placeholder="Name or company"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
+          id="customer-name"
+          aria-invalid={!!nameError}
+          className={nameError ? INPUT_ERROR_CLS : INPUT_CLS}
         />
+        <FieldError message={nameError} />
         {suggestions.length > 0 && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-30 overflow-hidden">
             {suggestions.map((c, i) => (
@@ -167,8 +187,11 @@ export default function CustomerFields({
             onChange={e => onEmailChange(e.target.value)}
             autoComplete="email"
             placeholder="kunde@firma.de"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-800 bg-gray-50"
+            id="customer-email"
+            aria-invalid={!!emailError}
+            className={emailError ? INPUT_ERROR_CLS : INPUT_CLS}
           />
+          <FieldError message={emailError} />
         </div>
       )}
 

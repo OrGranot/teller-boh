@@ -5,6 +5,7 @@ const React = require("react");
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { getNextInvoiceNumber } from "@/lib/invoice-counter";
+import { emailProblem } from "@/lib/email";
 import InvoicePDF from "@/components/InvoicePDF";
 import type { Invoice, CompanySettings } from "@/lib/types";
 
@@ -39,12 +40,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const { invoice }: { invoice: Invoice } = await req.json();
+    invoice.customer_email = invoice.customer_email?.trim() ?? "";
 
-    if (!invoice.customer_email) {
-      return NextResponse.json(
-        { error: "Recipient email is required." },
-        { status: 400 }
-      );
+    const problem = emailProblem(invoice.customer_email);
+    if (problem) {
+      return NextResponse.json({ error: problem, field: "email" }, { status: 400 });
     }
 
     // Load company settings — prefer the profile linked to this invoice
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           lang: invoice.lang,
           total,
           notes: invoice.notes?.trim() || null,
-          status: invoice.status === "paid" ? "paid" : "sent",
+          status: invoice.status === "paid" ? "paid" : invoice.status || "draft",
           updated_at: new Date().toISOString(),
         })
         .eq("id", invoice.id)
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           lang: invoice.lang,
           total,
           notes: invoice.notes?.trim() || null,
-          status: invoice.status === "paid" ? "paid" : "sent",
+          status: invoice.status === "paid" ? "paid" : invoice.status || "draft",
           restaurant_id: restaurantId,
         })
         .select("id")
@@ -186,10 +186,11 @@ export async function POST(req: NextRequest) {
       ? `Guten Tag,\n\nim Anhang finden Sie unsere Rechnung Nr. ${invoiceNumber}.\n\nBei Fragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\n${company.name}`
       : `Dear recipient,\n\nPlease find attached our invoice no. ${invoiceNumber}.\n\nDon't hesitate to reach out if you have any questions.\n\nBest regards,\n${company.name}`;
 
-    await resend.emails.send({
+    const ccEmail = company.email || "hello@tellerberlin.com";
+    const { error: sendError } = await resend.emails.send({
       to: invoice.customer_email,
       from: `${company.display_name || company.name} <${FROM_EMAIL}>`,
-      cc: company.email || "hello@tellerberlin.com",
+      cc: ccEmail,
       subject,
       text: body,
       attachments: [
@@ -200,10 +201,33 @@ export async function POST(req: NextRequest) {
       ],
     });
 
+    if (sendError) {
+      console.error("Resend error:", sendError);
+      return NextResponse.json(
+        {
+          error: `Email was NOT sent: ${sendError.message}`,
+          field: /`to`|recipient/i.test(sendError.message) ? "email" : undefined,
+          invoiceId: savedInvoiceId,
+          invoiceNumber,
+        },
+        { status: 502 }
+      );
+    }
+
+    if (savedInvoiceId && invoice.status !== "paid") {
+      await supabase
+        .from("invoices")
+        .update({ status: "sent", updated_at: new Date().toISOString() })
+        .eq("id", savedInvoiceId)
+        .eq("restaurant_id", restaurantId);
+    }
+
     return NextResponse.json({
       success: true,
       invoiceId: savedInvoiceId,
       invoiceNumber,
+      sentTo: invoice.customer_email,
+      cc: ccEmail,
     });
   } catch (err) {
     console.error("Send invoice error:", err);

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatEuro, parseNum, today, addDays, LABELS } from "@/lib/format";
+import { emailProblem } from "@/lib/email";
 import type { Contact, CatalogItem, Invoice, InvoiceItem } from "@/lib/types";
 import DatePicker from "@/components/DatePicker";
 import CustomerFields, { type ContactSuggestion } from "@/components/CustomerFields";
@@ -45,6 +46,10 @@ const EMPTY_ITEM = (): InvoiceItem => ({
   vat_rate: "7",
   sum: "",
 });
+
+function isEmptyRow(item: InvoiceItem): boolean {
+  return !item.description.trim() && !item.price?.trim() && !item.sum?.trim();
+}
 
 function calcRowSum(item: InvoiceItem): number {
   const manSum = parseNum(item.sum || "");
@@ -126,12 +131,28 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   const [parsingReceipt, setParsingReceipt] = useState(false);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string | null; email?: string | null }>({});
+  function showFieldError(field: "name" | "email", message: string) {
+    setFieldErrors((prev) => ({ ...prev, [field]: message }));
+    const el = document.getElementById(field === "name" ? "customer-name" : "customer-email");
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    el?.focus({ preventScroll: true });
+  }
+
+  const descRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const pendingDescFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingDescFocus.current === null) return;
+    descRefs.current[pendingDescFocus.current]?.focus();
+    pendingDescFocus.current = null;
+  }, [items]);
+
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function showToast(message: string, type: "success" | "error" | "info" = "info") {
+  function showToast(message: string, type: "success" | "error" | "info" = "info", durationMs = 4000) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 4000);
+    toastTimer.current = setTimeout(() => setToast(null), durationMs);
   }
 
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -357,7 +378,15 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
     }
   }
 
+  // Reuse an existing empty row if there is one; otherwise append. Either way, focus its description.
   function addRow() {
+    const emptyIdx = items.findIndex(isEmptyRow);
+    if (emptyIdx >= 0) { descRefs.current[emptyIdx]?.focus(); return; }
+    appendRow();
+  }
+
+  function appendRow() {
+    pendingDescFocus.current = items.length;
     setItems((prev) => [...prev, EMPTY_ITEM()]);
   }
 
@@ -397,7 +426,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleGenerate() {
-    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
+    if (!customerName.trim()) { showFieldError("name", "Enter a customer name."); return; }
     setGenerating(true);
     await ensureContactSaved();
     try {
@@ -431,7 +460,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleSaveDraft() {
-    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
+    if (!customerName.trim()) { showFieldError("name", "Enter a customer name."); return; }
     setSavingDraft(true);
     await ensureContactSaved();
 
@@ -524,8 +553,12 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
   }
 
   async function handleSend() {
-    if (!customerName.trim()) { showToast("Please enter a customer name.", "error"); return; }
-    if (!custEmail.trim()) { showToast("Please enter the recipient's email address.", "error"); return; }
+    if (!customerName.trim()) { showFieldError("name", "Enter a customer name."); return; }
+    const email = custEmail.trim();
+    const problem = emailProblem(email);
+    if (problem) { showFieldError("email", problem); return; }
+    if (email !== custEmail) setCustEmail(email);
+    setFieldErrors({});
     setSending(true);
     await ensureContactSaved();
     try {
@@ -535,13 +568,17 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
         body: JSON.stringify({ invoice: buildInvoice() }),
       });
       const json = await res.json();
-      if (!res.ok) { showToast("Error sending invoice: " + json.error, "error"); return; }
       const newId = json.invoiceId;
       const newNum = json.invoiceNumber;
       if (newId && !savedId) setSavedId(newId);
       if (newNum && !invoiceNumber) setInvoiceNumber(newNum);
-      showToast(`Invoice sent to ${custEmail}`, "success");
-      setTimeout(() => router.push("/invoices"), 1500);
+      if (!res.ok) {
+        if (json.field === "email") showFieldError("email", json.error);
+        else showToast(json.error || "Invoice could not be sent.", "error", 10000);
+        return;
+      }
+      showToast(`Invoice sent to ${json.sentTo} (copy to ${json.cc})`, "success", 4000);
+      setTimeout(() => router.push("/invoices"), 3500);
     } finally {
       setSending(false);
     }
@@ -662,7 +699,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
           </p>
           <CustomerFields
             name={customerName}
-            onNameChange={handleCustomerNameChange}
+            onNameChange={(v) => { handleCustomerNameChange(v); if (fieldErrors.name) setFieldErrors((e) => ({ ...e, name: null })); }}
+            nameError={fieldErrors.name}
             street={addrStreet}
             onStreetChange={setAddrStreet}
             zip={addrZip}
@@ -672,7 +710,8 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
             country={addrCountry}
             onCountryChange={setAddrCountry}
             email={custEmail}
-            onEmailChange={setCustEmail}
+            onEmailChange={(v) => { setCustEmail(v); if (fieldErrors.email) setFieldErrors((e) => ({ ...e, email: null })); }}
+            emailError={fieldErrors.email}
             emailLabel="Email (for sending invoice)"
             tradeReg={custTradeReg}
             onTradeRegChange={setCustTradeReg}
@@ -751,6 +790,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                     <td className="py-1.5 pr-2">
                       <div className="relative" ref={itemSuggestions?.rowIdx === idx ? itemSugRef : undefined}>
                         <input
+                          ref={(el) => { descRefs.current[idx] = el; }}
                           type="text"
                           value={item.description}
                           onChange={(e) => handleDescChange(idx, e.target.value)}
@@ -809,6 +849,13 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                         type="text"
                         value={item.sum || ""}
                         onChange={(e) => updateItemSum(idx, e.target.value)}
+                        onKeyDown={(e) => {
+                          // Tab out of the last row's total → start a new row
+                          if (e.key === "Tab" && !e.shiftKey && idx === items.length - 1 && !isEmptyRow(item)) {
+                            e.preventDefault();
+                            appendRow();
+                          }
+                        }}
                         className="w-full border border-gray-200 rounded-lg px-2 py-2 text-sm text-right outline-none focus:border-gray-700 bg-gray-50"
                         placeholder="0,00"
                       />
@@ -818,6 +865,7 @@ export default function InvoiceForm({ initial, restaurantId }: Props) {
                         <button
                           type="button"
                           onClick={() => removeRow(idx)}
+                          tabIndex={-1}
                           className="text-gray-300 hover:text-red-400 text-lg leading-none w-7 h-7 flex items-center justify-center rounded transition-colors opacity-0 group-hover:opacity-100"
                         >
                           ×
